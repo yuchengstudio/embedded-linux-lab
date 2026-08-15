@@ -1,0 +1,14 @@
+services:
+  driver-lab:
+    build: .
+    image: linux-driver-lab:latest
+    container_name: driver-lab
+    hostname: driver-lab
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./modules:/lab/modules
+      - ./kernel-build:/lab/kernel-build
+      - ./initramfs-root:/lab/initramfs-root
+    working_dir: /lab
+    command: /bin/bash

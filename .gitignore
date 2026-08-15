@@ -1,0 +1,14 @@
+# Build artifacts
+linux-driver-lab/kernel-build/
+linux-driver-lab/initramfs-root/
+
+# WorkBuddy internal
+.workbuddy/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

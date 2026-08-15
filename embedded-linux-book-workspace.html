@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>嵌入式Linux驱动开发 - 读书实验台</title>
+<style>
+:root {
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --text: #1a1a2e;
+  --text-sec: #6b7280;
+  --text-hint: #9ca3af;
+  --border: #e5e7eb;
+  --primary: #185FA5;
+  --primary-light: #E6F1FB;
+  --primary-mid: #B5D4F4;
+  --teal: #0F6E56;
+  --teal-light: #E1F5EE;
+  --teal-mid: #9FE1CB;
+  --amber: #854F0B;
+  --amber-light: #FAEEDA;
+  --amber-mid: #FAC775;
+  --red: #A32D2D;
+  --red-light: #FCEBEB;
+  --red-mid: #F7C1C1;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.app { max-width: 960px; margin: 0 auto; padding: 16px; padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+
+/* Header */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
+}
+.header-left { display: flex; align-items: center; gap: 10px; }
+.header-logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: var(--primary); display: flex; align-items: center; justify-content: center;
+}
+.header-logo svg { width: 20px; height: 20px; }
+.header h1 { font-size: 17px; font-weight: 600; }
+.header-sub { font-size: 12px; color: var(--text-sec); }
+.header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--card); color: var(--text); font-size: 13px; cursor: pointer;
+  transition: all 0.15s; font-family: inherit;
+}
+.btn:hover { border-color: var(--primary); color: var(--primary); }
+.btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn-primary:hover { background: #0C447C; color: #fff; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-danger { color: var(--red); border-color: var(--red-mid); }
+.btn-danger:hover { background: var(--red-light); }
+.btn svg { width: 14px; height: 14px; }
+
+/* Sync status badge */
+.sync-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 20px; font-size: 11px;
+  background: var(--amber-light); color: var(--amber);
+}
+.sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }
+
+/* Book info card */
+.book-info {
+  background: linear-gradient(135deg, var(--primary-light), var(--card));
+  border: 1px solid var(--primary-mid); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 16px; box-shadow: var(--shadow);
+}
+.book-info-row { display: flex; align-items: flex-start; gap: 12px; }
+.book-icon {
+  width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0;
+  background: var(--primary); display: flex; align-items: center; justify-content: center;
+}
+.book-icon svg { width: 22px; height: 22px; }
+.book-info-content { flex: 1; min-width: 0; }
+.book-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.book-meta { font-size: 11px; color: var(--text-sec); margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
+.book-meta span { display: inline-flex; align-items: center; gap: 3px; }
+.book-platforms { font-size: 11px; color: var(--teal); margin-top: 4px; }
+
+/* Today section */
+.today-section {
+  background: var(--card); border-radius: var(--radius); padding: 16px;
+  margin-bottom: 16px; box-shadow: var(--shadow);
+  border-left: 4px solid var(--primary);
+}
+.today-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.today-title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.today-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+  background: var(--red); color: #fff; font-size: 11px; font-weight: 600;
+}
+.today-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-radius: 8px; margin-bottom: 6px; transition: background 0.15s;
+}
+.today-item:hover { background: var(--bg); }
+.today-item-overdue { background: var(--red-light); }
+.today-item-overdue:hover { background: #F9D5D5; }
+.today-item-today { background: var(--primary-light); }
+.today-item-today:hover { background: #D1E5F7; }
+.today-item-info { flex: 1; min-width: 0; }
+.today-item-title { font-size: 13px; font-weight: 500; }
+.today-item-title.overdue { color: var(--red); }
+.today-item-meta { font-size: 11px; color: var(--text-sec); display: flex; gap: 8px; flex-wrap: wrap; }
+.today-item-tag {
+  display: inline-block; padding: 1px 6px; border-radius: 4px;
+  font-size: 10px; font-weight: 500;
+}
+.tag-overdue { background: var(--red); color: #fff; }
+.tag-today { background: var(--primary); color: #fff; }
+.tag-read { background: var(--teal); color: #fff; }
+.tag-exp { background: var(--amber); color: #fff; }
+.today-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.today-empty { text-align: center; padding: 20px; color: var(--text-hint); font-size: 13px; }
+
+/* Progress overview */
+.progress-row {
+  display: flex; gap: 12px; margin-bottom: 16px;
+}
+.progress-card {
+  flex: 1; background: var(--card); border-radius: var(--radius);
+  padding: 14px; box-shadow: var(--shadow); text-align: center;
+}
+.progress-num { font-size: 24px; font-weight: 700; }
+.progress-label { font-size: 11px; color: var(--text-sec); margin-top: 2px; }
+.progress-card.read .progress-num { color: var(--teal); }
+.progress-card.reading .progress-num { color: var(--primary); }
+.progress-card.exp .progress-num { color: var(--amber); }
+.progress-card.note .progress-num { color: var(--text); }
+
+/* Tabs */
+.tabs {
+  display: flex; gap: 4px; margin-bottom: 12px; background: var(--card);
+  border-radius: var(--radius); padding: 4px; box-shadow: var(--shadow);
+}
+.tab {
+  flex: 1; padding: 10px; text-align: center; border-radius: 8px;
+  cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-sec);
+  transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px;
+  border: none; background: none; font-family: inherit;
+}
+.tab.active { background: var(--primary); color: #fff; }
+.tab svg { width: 15px; height: 15px; }
+
+/* Panel */
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* Chapter cards */
+.chapter-list { display: flex; flex-direction: column; gap: 10px; }
+.chapter-card {
+  background: var(--card); border-radius: var(--radius); padding: 14px;
+  box-shadow: var(--shadow); border-left: 4px solid var(--border);
+  transition: border-color 0.15s;
+}
+.chapter-card.status-done { border-left-color: var(--teal); }
+.chapter-card.status-reading { border-left-color: var(--primary); }
+.chapter-card.status-pending { border-left-color: var(--border); }
+.chapter-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.chapter-name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.chapter-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 6px; font-size: 12px; font-weight: 600;
+  background: var(--bg); color: var(--text-sec);
+}
+.chapter-card.status-done .chapter-num { background: var(--teal-light); color: var(--teal); }
+.chapter-card.status-reading .chapter-num { background: var(--primary-light); color: var(--primary); }
+.chapter-meta { display: flex; gap: 8px; align-items: center; }
+.status-select {
+  padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border);
+  font-size: 12px; font-family: inherit; background: var(--card); color: var(--text);
+  cursor: pointer;
+}
+.chapter-detail { font-size: 12px; color: var(--text-sec); display: flex; gap: 12px; flex-wrap: wrap; }
+.chapter-detail span { display: inline-flex; align-items: center; gap: 3px; }
+.chapter-detail svg { width: 12px; height: 12px; }
+.chapter-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+/* Experiment cards */
+.exp-list { display: flex; flex-direction: column; gap: 10px; }
+.exp-card {
+  background: var(--card); border-radius: var(--radius); padding: 14px;
+  box-shadow: var(--shadow);
+}
+.exp-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.exp-name { font-size: 14px; font-weight: 600; }
+.exp-status {
+  padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;
+}
+.exp-status.done { background: var(--teal-light); color: var(--teal); }
+.exp-status.progress { background: var(--primary-light); color: var(--primary); }
+.exp-status.planned { background: var(--amber-light); color: var(--amber); }
+.exp-meta { font-size: 12px; color: var(--text-sec); display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.exp-meta span { display: inline-flex; align-items: center; gap: 3px; }
+.exp-meta svg { width: 12px; height: 12px; }
+.exp-desc { font-size: 13px; color: var(--text); margin-bottom: 6px; }
+.exp-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.exp-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 8px; border-radius: 6px; font-size: 11px;
+}
+.exp-tag.api { background: var(--teal-light); color: var(--teal); }
+.exp-tag.docker { background: var(--primary-light); color: var(--primary); font-family: "SF Mono", "Fira Code", monospace; }
+.exp-tag.book { background: var(--amber-light); color: var(--amber); }
+.exp-tag svg { width: 11px; height: 11px; }
+.exp-result {
+  font-size: 12px; color: var(--text-sec); background: var(--bg);
+  padding: 8px 10px; border-radius: 6px; margin-bottom: 6px;
+  white-space: pre-wrap; font-family: "SF Mono", "Fira Code", monospace; font-size: 12px;
+}
+.exp-actions { display: flex; gap: 6px; }
+.exp-code {
+  font-size: 12px; background: #1e1e2e; color: #cdd6f4;
+  padding: 10px; border-radius: 6px; margin-bottom: 6px;
+  font-family: "SF Mono", "Fira Code", monospace; white-space: pre-wrap;
+  overflow-x: auto; max-height: 200px; overflow-y: auto;
+}
+
+/* Note cards */
+.note-list { display: flex; flex-direction: column; gap: 10px; }
+.note-card {
+  background: var(--card); border-radius: var(--radius); padding: 14px;
+  box-shadow: var(--shadow); border-left: 3px solid var(--amber-mid);
+}
+.note-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.note-chapter { font-size: 12px; font-weight: 600; color: var(--amber); }
+.note-date { font-size: 11px; color: var(--text-hint); }
+.note-content { font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
+.note-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+/* Add button */
+.add-btn-wrapper { margin-bottom: 12px; }
+
+/* Modal */
+.modal-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4); z-index: 1000; justify-content: center; align-items: center;
+  padding: 16px;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--card); border-radius: 16px; padding: 20px;
+  width: 100%; max-width: 500px; max-height: 85vh; overflow-y: auto;
+}
+.modal-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+.form-group { margin-bottom: 14px; }
+.form-label { font-size: 13px; font-weight: 500; margin-bottom: 4px; display: block; }
+.form-input, .form-select, .form-textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 8px; font-size: 14px; font-family: inherit;
+  background: var(--card); color: var(--text); min-height: 44px;
+}
+.form-textarea { min-height: 80px; resize: vertical; line-height: 1.6; }
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  outline: none; border-color: var(--primary);
+}
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+/* Confirm dialog */
+.confirm-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4); z-index: 1001; justify-content: center; align-items: center;
+  padding: 16px;
+}
+.confirm-overlay.show { display: flex; }
+.confirm-box {
+  background: var(--card); border-radius: 16px; padding: 20px;
+  width: 100%; max-width: 360px; text-align: center;
+}
+.confirm-icon {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--red-light); display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 12px;
+}
+.confirm-icon svg { width: 24px; height: 24px; color: var(--red); }
+.confirm-text { font-size: 14px; margin-bottom: 16px; }
+.confirm-warn { color: var(--red); font-weight: 600; font-size: 13px; margin-bottom: 8px; }
+
+/* Empty state */
+.empty-state {
+  text-align: center; padding: 40px 20px; color: var(--text-hint);
+}
+.empty-state svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.4; }
+.empty-state p { font-size: 13px; }
+
+/* Backup hint */
+.backup-hint {
+  background: var(--amber-light); border-radius: 8px; padding: 10px 14px;
+  font-size: 12px; color: var(--amber); margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.backup-hint svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* Mobile bottom tab */
+.mobile-tabs {
+  display: none; position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--card); border-top: 1px solid var(--border);
+  padding: 6px; padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  z-index: 100;
+}
+.mobile-tab {
+  flex: 1; padding: 8px; text-align: center; font-size: 11px;
+  color: var(--text-sec); cursor: pointer; border: none; background: none;
+  font-family: inherit; display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.mobile-tab svg { width: 20px; height: 20px; }
+.mobile-tab.active { color: var(--primary); }
+
+@media (max-width: 768px) {
+  .progress-row { flex-wrap: wrap; }
+  .progress-card { min-width: calc(50% - 6px); }
+  .mobile-tabs { display: flex; }
+  .desktop-tabs { display: none; }
+  .header h1 { font-size: 15px; }
+  .form-input, .form-select, .form-textarea { font-size: 16px; }
+}
+@media (min-width: 769px) {
+  .desktop-tabs { display: flex; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="header-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+      </div>
+      <div>
+        <h1>嵌入式Linux驱动开发 - 读书实验台</h1>
+        <div class="header-sub">读书 + 章节实验 + 笔记 - 进度自动追踪</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="sync-badge"><span class="sync-dot"></span>离线模式</span>
+      <button class="btn btn-sm" onclick="exportData()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        导出备份
+      </button>
+      <button class="btn btn-sm" onclick="document.getElementById('importFile').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        导入恢复
+      </button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+    </div>
+  </div>
+
+  <!-- Book info card -->
+  <div class="book-info" id="bookInfoCard"></div>
+
+  <!-- Backup hint (shown when data > 30 items) -->
+  <div class="backup-hint" id="backupHint" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span id="backupHintText"></span>
+  </div>
+
+  <!-- Progress overview -->
+  <div class="progress-row">
+    <div class="progress-card read">
+      <div class="progress-num" id="statRead">0</div>
+      <div class="progress-label">已读章节</div>
+    </div>
+    <div class="progress-card reading">
+      <div class="progress-num" id="statReading">0</div>
+      <div class="progress-label">进行中</div>
+    </div>
+    <div class="progress-card exp">
+      <div class="progress-num" id="statExpDone">0</div>
+      <div class="progress-label">完成实验</div>
+    </div>
+    <div class="progress-card note">
+      <div class="progress-num" id="statNotes">0</div>
+      <div class="progress-label">读书笔记</div>
+    </div>
+  </div>
+
+  <!-- Today section -->
+  <div class="today-section">
+    <div class="today-header">
+      <div class="today-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        今天要处理
+      </div>
+      <span class="today-count" id="todayCount">0</span>
+    </div>
+    <div id="todayList"></div>
+  </div>
+
+  <!-- Desktop tabs -->
+  <div class="tabs desktop-tabs">
+    <button class="tab active" data-tab="chapters" onclick="switchTab('chapters')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      章节进度
+    </button>
+    <button class="tab" data-tab="experiments" onclick="switchTab('experiments')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      实验日志
+    </button>
+    <button class="tab" data-tab="notes" onclick="switchTab('notes')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      读书笔记
+    </button>
+  </div>
+
+  <!-- Panel: Chapters -->
+  <div class="panel active" id="panel-chapters">
+    <div class="add-btn-wrapper">
+      <button class="btn btn-primary btn-sm" onclick="openChapterModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        添加章节
+      </button>
+    </div>
+    <div class="chapter-list" id="chapterList"></div>
+  </div>
+
+  <!-- Panel: Experiments -->
+  <div class="panel" id="panel-experiments">
+    <div class="add-btn-wrapper">
+      <button class="btn btn-primary btn-sm" onclick="openExpModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        添加实验
+      </button>
+    </div>
+    <div class="exp-list" id="expList"></div>
+  </div>
+
+  <!-- Panel: Notes -->
+  <div class="panel" id="panel-notes">
+    <div class="add-btn-wrapper">
+      <button class="btn btn-primary btn-sm" onclick="openNoteModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        添加笔记
+      </button>
+    </div>
+    <div class="note-list" id="noteList"></div>
+  </div>
+
+  <div style="margin-top: 20px; text-align: center;">
+    <button class="btn btn-danger btn-sm" onclick="confirmClear()">清空所有数据</button>
+  </div>
+</div>
+
+<!-- Mobile bottom tabs -->
+<div class="mobile-tabs">
+  <button class="mobile-tab active" data-mtab="chapters" onclick="switchTab('chapters')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+    章节
+  </button>
+  <button class="mobile-tab" data-mtab="experiments" onclick="switchTab('experiments')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+    实验
+  </button>
+  <button class="mobile-tab" data-mtab="notes" onclick="switchTab('notes')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    笔记
+  </button>
+</div>
+
+<!-- Chapter Modal -->
+<div class="modal-overlay" id="chapterModal">
+  <div class="modal">
+    <div class="modal-title" id="chapterModalTitle">添加章节</div>
+    <input type="hidden" id="chapterId">
+    <div class="form-group">
+      <label class="form-label">章节名称</label>
+      <input type="text" class="form-input" id="chapterName" placeholder="如：字符设备驱动" style="min-height:44px">
+    </div>
+    <div class="form-group">
+      <label class="form-label">状态</label>
+      <select class="form-select" id="chapterStatus">
+        <option value="pending">未读</option>
+        <option value="reading">进行中</option>
+        <option value="done">已读</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">计划完成日期</label>
+      <input type="date" class="form-input" id="chapterDueDate" style="min-height:44px">
+    </div>
+    <div class="form-group">
+      <label class="form-label">关键概念/摘要</label>
+      <textarea class="form-textarea" id="chapterSummary" placeholder="本章的关键概念、重要API等"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('chapterModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveChapter()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Experiment Modal -->
+<div class="modal-overlay" id="expModal">
+  <div class="modal">
+    <div class="modal-title" id="expModalTitle">添加实验</div>
+    <input type="hidden" id="expId">
+    <div class="form-group">
+      <label class="form-label">实验名称</label>
+      <input type="text" class="form-input" id="expName" placeholder="如：字符设备读写实验" style="min-height:44px">
+    </div>
+    <div class="form-group">
+      <label class="form-label">关联章节</label>
+      <select class="form-select" id="expChapter"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">状态</label>
+      <select class="form-select" id="expStatus">
+        <option value="planned">计划中</option>
+        <option value="progress">进行中</option>
+        <option value="done">已完成</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">计划完成日期</label>
+      <input type="date" class="form-input" id="expDueDate" style="min-height:44px">
+    </div>
+    <div class="form-group">
+      <label class="form-label">实验描述</label>
+      <textarea class="form-textarea" id="expDesc" placeholder="实验目标、对应书中哪个实验"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">关键内核 API</label>
+      <input type="text" class="form-input" id="expKeyAPI" placeholder="如：module_init, pr_info, module_param" style="min-height:44px">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Docker Lab 命令</label>
+      <input type="text" class="form-input" id="expDockerCmd" placeholder="如：compile-module.sh /lab/modules/hello" style="min-height:44px;font-family:SF Mono,Fira Code,monospace;font-size:13px">
+    </div>
+    <div class="form-group">
+      <label class="form-label">书中代码清单</label>
+      <input type="text" class="form-input" id="expBookRef" placeholder="如：代码清单3-1" style="min-height:44px">
+    </div>
+    <div class="form-group">
+      <label class="form-label">实验代码</label>
+      <textarea class="form-textarea" id="expCode" placeholder="内核模块源码" style="font-family:SF Mono,Fira Code,monospace;font-size:12px;min-height:120px"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">实验结果</label>
+      <textarea class="form-textarea" id="expResult" placeholder="实验现象、输出、结论"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('expModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveExperiment()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Note Modal -->
+<div class="modal-overlay" id="noteModal">
+  <div class="modal">
+    <div class="modal-title" id="noteModalTitle">添加笔记</div>
+    <input type="hidden" id="noteId">
+    <div class="form-group">
+      <label class="form-label">关联章节</label>
+      <select class="form-select" id="noteChapter"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">笔记内容</label>
+      <textarea class="form-textarea" id="noteContent" placeholder="关键概念、API说明、踩坑记录..." style="min-height:160px"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('noteModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveNote()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm dialog -->
+<div class="confirm-overlay" id="confirmDialog">
+  <div class="confirm-box">
+    <div class="confirm-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </div>
+    <div class="confirm-warn">此操作不可撤销！</div>
+    <div class="confirm-text" id="confirmText">确认清空所有数据吗？</div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn" onclick="closeConfirm()">取消</button>
+      <button class="btn btn-danger" id="confirmBtn">确认清空</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var STORAGE_KEY = 'wb_embedded_linux_book_';
+var DATA_VERSION = 3;
+var data = { chapters: [], experiments: [], notes: [], bookInfo: null, dataVersion: 0 };
+
+function loadData() {
+  var saved = localStorage.getItem(STORAGE_KEY + 'data');
+  if (saved) {
+    try {
+      data = JSON.parse(saved);
+      if (!data.dataVersion || data.dataVersion < DATA_VERSION) {
+        if (confirm('检测到旧版数据，是否更新为最新结构（全书30个实验）？\n点击确定将重置为新书数据，点击取消保留旧数据。')) {
+          localStorage.removeItem(STORAGE_KEY + 'data');
+          initSampleData();
+        }
+      }
+    } catch(e) { data = { chapters: [], experiments: [], notes: [], bookInfo: null, dataVersion: 0 }; }
+  } else {
+    initSampleData();
+  }
+}
+function saveData() {
+  localStorage.setItem(STORAGE_KEY + 'data', JSON.stringify(data));
+  renderAll();
+  checkBackupHint();
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).substr(2,5); }
+function todayStr() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function daysBetween(d1, d2) {
+  if (!d1 || !d2) return 0;
+  var t1 = new Date(d1); var t2 = new Date(d2);
+  return Math.round((t2 - t1) / 86400000);
+}
+
+function initSampleData() {
+  data = {
+    dataVersion: 3,
+    bookInfo: {
+      title: '嵌入式Linux设备驱动程序开发指南（原书第2版）',
+      author: 'Alberto Liberal de los Rios',
+      publisher: '机械工业出版社',
+      year: '2021',
+      isbn: '9787111684558',
+      platforms: 'NXP i.MX7D / Microchip SAMA5D2 / Broadcom BCM2837'
+    },
+    chapters: [
+      { id: 'c1', name: '第1章 构建系统', status: 'done', dueDate: '2026-08-10', summary: '嵌入式Linux六大组件：U-Boot引导加载器、Linux内核、系统调用接口、C运行时库、共享库、根文件系统。三种硬件平台的Yocto构建。启动过程POR->ROM->U-Boot->Kernel->rootfs。' },
+      { id: 'c2', name: '第2章 Linux设备与驱动模型', status: 'done', dueDate: '2026-08-12', summary: '统一设备模型：总线核心驱动(bus_type/bus_register)、总线控制器驱动、设备驱动(driver_register/probe)、设备树(DTSpec/IEEE 1275)。设备和驱动通过总线绑定，probe()在匹配时回调。' },
+      { id: 'c3', name: '第3章 最简驱动程序', status: 'reading', dueDate: '2026-08-15', summary: 'GPLv2许可证。三个实验：helloworld模块(pr_info)、带参数helloworld(module_param)、helloworld计时(ktime_get)。module_init/module_exit宏，printk日志级别(KERN_INFO等)。' },
+      { id: 'c4', name: '第4章 字符设备驱动', status: 'pending', dueDate: '2026-08-22', summary: '字符设备三方案：register_chrdev(传统)、class_create+device_create(自动设备节点)、misc_register(杂项简化)。file_operations结构体{open,read,write,release,unlocked_ioctl}。ioctl用户态-内核态通信。' },
+      { id: 'c5', name: '第5章 平台设备驱动', status: 'pending', dueDate: '2026-08-29', summary: '平台设备(platform_driver/platform_device)：probe/remove回调，设备树匹配compatible。pinctrl子系统、GPIO控制器(gpio_chip)、GPIO描述符(gpiod_get)。MMIO(ioremap/readl/writel)。LED类(led_classdev)。UIO用户态I/O。' },
+      { id: 'c6', name: '第6章 I2C从端驱动', status: 'pending', dueDate: '2026-09-05', summary: 'I2C子系统：i2c_adapter(控制器)、i2c_client(从端设备)、i2c_driver(从端驱动)。i2c_register_driver注册，probe匹配设备树compatible。sysfs(kobject/attribute)用户态交互。' },
+      { id: 'c7', name: '第7章 处理设备驱动中的中断', status: 'pending', dueDate: '2026-09-12', summary: '中断处理：request_irq注册、中断域(irq_domain)。延迟机制：softirq/tasklet/timer_list/request_threaded_irq/workqueue。锁(spinlock/mutex)。睡眠(wait_event/schedule)。内核线程(kthread_create)。' },
+      { id: 'c8', name: '第8章 在Linux驱动中分配内存', status: 'pending', dueDate: '2026-09-19', summary: 'ARM MMU转换表。地址类型：用户虚拟/内核虚拟/物理/总线。分配器：页面分配器(alloc_pages)、SLAB/SLUB、kmalloc/kfree、vmalloc。' },
+      { id: 'c9', name: '第9章 在Linux设备驱动中使用DMA', status: 'pending', dueDate: '2026-09-26', summary: 'DMA缓存一致性。DMA引擎API：dma_alloc_coherent(一致性)、dma_map_single(流式)、dma_map_sg(分散/聚集)。用户态DMA(DMA-BUF)。' },
+      { id: 'c10', name: '第10章 输入子系统设备驱动框架', status: 'pending', dueDate: '2026-10-03', summary: '输入子系统：input_allocate_device/input_register_device，事件类型(EV_KEY/EV_ABS)。SPI子系统：spi_driver/spi_device，spi_sync/spi_async传输。' },
+      { id: 'c11', name: '第11章 设备驱动中的工业IO子系统', status: 'pending', dueDate: '2026-10-10', summary: 'IIO子系统：iio_dev/iio_info/iio_chan_spec。sysfs接口(Channels/Buffer/Trigger)。IIO事件。缓冲区触发式采集。DAC/ADC实验，硬件触发。' },
+      { id: 'c12', name: '第12章 regmap API', status: 'pending', dueDate: '2026-10-17', summary: 'regmap：统一寄存器访问抽象层，支持I2C/SPI/MMIO后端。regmap_init/regmap_read/regmap_write/regmap_update_bits。' },
+      { id: 'c13', name: '第13章 Linux USB设备驱动', status: 'pending', dueDate: '2026-10-24', summary: 'USB 2.0总线拓扑/枚举/传输(控制/批量/中断/同步)。USB描述符(设备/配置/接口/端点)。Linux USB子系统：usb_driver/usb_device_id。urb(USB请求块)。USB HID。' }
+    ],
+    experiments: [
+      { id: 'e301', name: '实验3-1: helloworld模块', chapterId: 'c3', status: 'done', dueDate: '2026-08-13', desc: '编写最简内核模块，验证module_init/module_exit和pr_info输出', keyAPI: 'module_init, module_exit, pr_info, MODULE_LICENSE', dockerCmd: 'compile-module.sh /lab/modules/hello', bookRef: '代码清单3-1', code: '#include <linux/module.h>\n#include <linux/init.h>\n\nstatic int __init hello_init(void)\n{\n    pr_info("Hello World\\n");\n    return 0;\n}\n\nstatic void __exit hello_exit(void)\n{\n    pr_info("Goodbye World\\n");\n}\n\nmodule_init(hello_init);\nmodule_exit(hello_exit);\nMODULE_LICENSE("GPL");\nMODULE_AUTHOR("same54");\nMODULE_DESCRIPTION("Experiment 3-1: helloworld");', result: 'insmod后dmesg看到"Hello World"，rmmod后看到"Goodbye World"。验证通过。' },
+      { id: 'e302', name: '实验3-2: 带参数的helloworld', chapterId: 'c3', status: 'progress', dueDate: '2026-08-14', desc: '使用module_param()宏让模块接受命令行参数', keyAPI: 'module_param, charp, 0644', dockerCmd: 'compile-module.sh /lab/modules/hello', bookRef: '代码清单3-3', code: '#include <linux/module.h>\n#include <linux/init.h>\n\nstatic char *name = "World";\nmodule_param(name, charp, 0644);\n\nstatic int __init hello_init(void)\n{\n    pr_info("Hello %s\\n", name);\n    return 0;\n}\n\nstatic void __exit hello_exit(void)\n{\n    pr_info("Goodbye %s\\n", name);\n}\n\nmodule_init(hello_init);\nmodule_exit(hello_exit);\nMODULE_LICENSE("GPL");', result: '计划: insmod hello.ko name=Linux -> dmesg应显示"Hello Linux"。还没在QEMU内测试——TODO' },
+      { id: 'e303', name: '实验3-3: helloworld计时', chapterId: 'c3', status: 'planned', dueDate: '2026-08-16', desc: '使用ktime_get()测量模块加载/卸载耗时', keyAPI: 'ktime_get, ktime_to_ns, s64', dockerCmd: 'compile-module.sh /lab/modules/hello', bookRef: '代码清单3-4', code: '', result: '' },
+      { id: 'e401', name: '实验4-1: helloworld字符设备', chapterId: 'c4', status: 'planned', dueDate: '2026-08-20', desc: '注册字符设备(register_chrdev)，实现open/read/write/release，通过ioctl测试', keyAPI: 'register_chrdev, file_operations, copy_to_user, copy_from_user, unlocked_ioctl', dockerCmd: 'compile-module.sh /lab/modules/chardev', bookRef: '代码清单4-1~4-3', code: '', result: '' },
+      { id: 'e402', name: '实验4-2: class字符设备', chapterId: 'c4', status: 'planned', dueDate: '2026-08-22', desc: '使用class_create+device_create自动创建/dev设备节点', keyAPI: 'class_create, device_create, class_destroy', dockerCmd: 'compile-module.sh /lab/modules/chardev', bookRef: '代码清单4-4', code: '', result: '' },
+      { id: 'e403', name: '实验4-3: 杂项字符设备(miscdevice)', chapterId: 'c4', status: 'planned', dueDate: '2026-08-24', desc: '使用misc_register简化字符设备注册，自动创建/dev设备节点', keyAPI: 'misc_register, misc_deregister, miscdevice, MISC_DYNAMIC_MINOR', dockerCmd: 'compile-module.sh /lab/modules/chardev', bookRef: '代码清单4-5', code: '', result: '' },
+      { id: 'e501', name: '实验5-1: 平台设备', chapterId: 'c5', status: 'planned', dueDate: '2026-08-26', desc: '编写platform_driver，通过设备树compatible匹配，probe/remove回调', keyAPI: 'platform_driver_register, platform_driver, of_device_id, probe, remove', dockerCmd: '新建 modules/platform/', bookRef: '代码清单5-1', code: '', result: '' },
+      { id: 'e502', name: '实验5-2: RGB LED平台设备', chapterId: 'c5', status: 'planned', dueDate: '2026-08-28', desc: '操作硬件GPIO控制RGB LED，MMIO设备访问', keyAPI: 'devm_gpiod_get, gpiod_set_value, ioremap, readl, writel', dockerCmd: '新建 modules/platform/', bookRef: '代码清单5-2', code: '', result: '' },
+      { id: 'e503', name: '实验5-3: RGB LED类', chapterId: 'c5', status: 'planned', dueDate: '2026-08-30', desc: '使用Linux LED类子系统注册LED设备', keyAPI: 'led_classdev_register, led_classdev_unregister, brightness_set', dockerCmd: '新建 modules/platform/', bookRef: '代码清单5-3', code: '', result: '' },
+      { id: 'e504', name: '实验5-4: LED UIO平台', chapterId: 'c5', status: 'planned', dueDate: '2026-09-01', desc: '用户态I/O框架，在用户空间直接操作硬件寄存器', keyAPI: 'uio_register_device, ioremap, UIO_MEM', dockerCmd: '新建 modules/uio/', bookRef: '代码清单5-4~5-5', code: '', result: '' },
+      { id: 'e601', name: '实验6-1: I2C I/O扩展设备', chapterId: 'c6', status: 'planned', dueDate: '2026-09-03', desc: '编写I2C从端驱动，通过i2c_transfer读写I/O扩展芯片', keyAPI: 'i2c_register_driver, i2c_driver, i2c_transfer, i2c_msg', dockerCmd: '新建 modules/i2c/', bookRef: '代码清单6-1', code: '', result: '' },
+      { id: 'e602', name: '实验6-2: I2C多显LED', chapterId: 'c6', status: 'planned', dueDate: '2026-09-05', desc: '通过sysfs文件系统控制I2C LED矩阵显示', keyAPI: 'sysfs_create_group, kobject, attribute, i2c_smbus_write_byte', dockerCmd: '新建 modules/i2c/', bookRef: '代码清单6-2', code: '', result: '' },
+      { id: 'e701', name: '实验7-1: 按钮中断设备', chapterId: 'c7', status: 'planned', dueDate: '2026-09-09', desc: '注册GPIO中断，按钮按下触发中断处理函数', keyAPI: 'request_irq, free_irq, IRQF_TRIGGER, irqreturn_t', dockerCmd: '新建 modules/irq/', bookRef: '代码清单7-1', code: '', result: '' },
+      { id: 'e702', name: '实验7-2: 睡眠设备', chapterId: 'c7', status: 'planned', dueDate: '2026-09-11', desc: '在驱动中使用等待队列和睡眠机制', keyAPI: 'wait_event_interruptible, wake_up, schedule, spinlock', dockerCmd: '新建 modules/irq/', bookRef: '代码清单7-2', code: '', result: '' },
+      { id: 'e703', name: '实验7-3: keyled类', chapterId: 'c7', status: 'planned', dueDate: '2026-09-13', desc: '使用内核线程处理按键和LED联动', keyAPI: 'kthread_create, kthread_run, kthread_stop, workqueue', dockerCmd: '新建 modules/irq/', bookRef: '代码清单7-3', code: '', result: '' },
+      { id: 'e801', name: '实验8-1: 链表内存分配', chapterId: 'c8', status: 'planned', dueDate: '2026-09-17', desc: '使用kmalloc分配内存，通过链表管理多个分配块', keyAPI: 'kmalloc, kfree, list_head, list_add, list_del', dockerCmd: '新建 modules/mem/', bookRef: '代码清单8-1', code: '', result: '' },
+      { id: 'e901', name: '实验9-1: 流式DMA', chapterId: 'c9', status: 'planned', dueDate: '2026-09-23', desc: '使用dma_map_single流式映射，DMA传输完成后取消映射', keyAPI: 'dma_map_single, dma_unmap_single, dma_sync_single_for_cpu', dockerCmd: '新建 modules/dma/', bookRef: '代码清单9-1', code: '', result: '' },
+      { id: 'e902', name: '实验9-2: 分散/聚集DMA设备', chapterId: 'c9', status: 'planned', dueDate: '2026-09-25', desc: '使用scatter/gather映射处理多段不连续内存DMA', keyAPI: 'dma_map_sg, dma_unmap_sg, scatterlist, sg_init_one', dockerCmd: '新建 modules/dma/', bookRef: '代码清单9-2', code: '', result: '' },
+      { id: 'e903', name: '实验9-3: 用户态DMA', chapterId: 'c9', status: 'planned', dueDate: '2026-09-27', desc: '在用户空间通过DMA-BUF使用DMA', keyAPI: 'dma_buf_export, dma_buf_fd, mmap', dockerCmd: '新建 modules/dma/', bookRef: '代码清单9-3~9-4', code: '', result: '' },
+      { id: 'e1001', name: '实验10-1: 输入子系统加速度计', chapterId: 'c10', status: 'planned', dueDate: '2026-10-01', desc: '注册input设备，上报EV_ABS事件模拟加速度计数据', keyAPI: 'input_allocate_device, input_register_device, input_report_abs, input_sync', dockerCmd: '新建 modules/input/', bookRef: '代码清单10-1', code: '', result: '' },
+      { id: 'e1002', name: '实验10-2: SPI加速度计输入设备', chapterId: 'c10', status: 'planned', dueDate: '2026-10-03', desc: '编写SPI从端驱动，结合输入子系统上报加速度数据', keyAPI: 'spi_register_driver, spi_device, spi_sync, input_report_abs', dockerCmd: '新建 modules/spi/', bookRef: '代码清单10-2', code: '', result: '' },
+      { id: 'e1101', name: '实验11-1: IIO子系统DAC', chapterId: 'c11', status: 'planned', dueDate: '2026-10-06', desc: '注册IIO设备，通过sysfs输出DAC值', keyAPI: 'devm_iio_device_alloc, iio_device_register, iio_info, iio_chan_spec', dockerCmd: '新建 modules/iio/', bookRef: '代码清单11-1', code: '', result: '' },
+      { id: 'e1102', name: '实验11-2: SPIDEV双通道ADC用户应用', chapterId: 'c11', status: 'planned', dueDate: '2026-10-08', desc: '用户态通过spidev接口读取ADC数据', keyAPI: 'spidev, ioctl, SPI_IOC_MESSAGE', dockerCmd: '用户态应用，无需内核模块', bookRef: '代码清单11-2', code: '', result: '' },
+      { id: 'e1103', name: '实验11-3: IIO子系统ADC', chapterId: 'c11', status: 'planned', dueDate: '2026-10-10', desc: '内核态IIO ADC驱动，通过sysfs读取ADC值', keyAPI: 'iio_chan_spec, iio_read_channel_raw, trigger', dockerCmd: '新建 modules/iio/', bookRef: '代码清单11-3~11-4', code: '', result: '' },
+      { id: 'e1104', name: '实验11-4: 硬件触发IIO ADC', chapterId: 'c11', status: 'planned', dueDate: '2026-10-12', desc: '使用硬件触发器触发IIO缓冲区采集', keyAPI: 'iio_triggered_buffer_setup, iio_trigger, irq_to_iio_trigger', dockerCmd: '新建 modules/iio/', bookRef: '代码清单11-5', code: '', result: '' },
+      { id: 'e1201', name: '实验12-1: SPI regmap IIO设备', chapterId: 'c12', status: 'planned', dueDate: '2026-10-15', desc: '使用regmap API统一寄存器访问，结合IIO子系统', keyAPI: 'regmap_init, regmap_read, regmap_write, regmap_update_bits, devm_regmap_init_spi', dockerCmd: '新建 modules/regmap/', bookRef: '代码清单12-1', code: '', result: '' },
+      { id: 'e1301', name: '实验13-1: USB HID设备应用', chapterId: 'c13', status: 'planned', dueDate: '2026-10-20', desc: '用户态USB HID设备通信，Harmony框架13步流程', keyAPI: 'libusb, hid_open, hid_write, hid_read', dockerCmd: '用户态应用，无需内核模块', bookRef: '实验13-1 (13步)', code: '', result: '' },
+      { id: 'e1302', name: '实验13-2: USB LED', chapterId: 'c13', status: 'planned', dueDate: '2026-10-22', desc: '编写USB设备驱动，通过urb控制USB LED设备', keyAPI: 'usb_register, usb_driver, usb_device_id, usb_submit_urb, urb', dockerCmd: '新建 modules/usb/', bookRef: '代码清单13-1', code: '', result: '' },
+      { id: 'e1303', name: '实验13-3: USB LED和开关', chapterId: 'c13', status: 'planned', dueDate: '2026-10-24', desc: '扩展USB LED驱动，增加开关输入中断端点处理', keyAPI: 'usb_submit_urb, usb_fill_int_urb, input_report_key', dockerCmd: '新建 modules/usb/', bookRef: '代码清单13-2', code: '', result: '' },
+      { id: 'e1304', name: '实验13-4: 连接USB多显LED的I2C', chapterId: 'c13', status: 'planned', dueDate: '2026-10-26', desc: 'USB+I2C混合驱动，USB接口控制I2C LED矩阵', keyAPI: 'usb_driver, i2c_adapter, i2c_algo, usb_to_i2c', dockerCmd: '新建 modules/usb/', bookRef: '代码清单13-3', code: '', result: '' }
+    ],
+    notes: [
+      { id: 'n1', chapterId: 'c1', content: '嵌入式Linux六大组件：引导加载器->内核->系统调用接口->C运行时库->系统共享库->根文件系统。\n\n启动流程：POR -> 片上ROM -> U-Boot(DDR初始化/加载内核+DTB) -> Linux内核 -> 挂载rootfs -> init。\n\n三种构建方式：手动脚本、Buildroot、Yocto。Yocto是工业级标准，书中用Yocto为i.MX7D/SAMA5D2/BCM2837构建。', date: '2026-08-10' },
+      { id: 'n2', chapterId: 'c2', content: '统一设备模型核心结构：\n- bus_type：总线类型(USB/PCI/I2C/platform)，通过bus_register()注册\n- device_driver：驱动，通过driver_register()注册到总线\n- device：设备，描述硬件拓扑\n\n绑定流程：设备或驱动注册时->总线match()->调用probe()->获取设备树配置。\n\n设备树(DTB)：源自IEEE 1275，U-Boot加载DTB到内存传给内核，内核解析DTB发现平台设备。', date: '2026-08-12' },
+      { id: 'n3', chapterId: 'c3', content: '内核模块基础API：\n- module_init() / module_exit()：注册加载/卸载回调\n- pr_info() = printk(KERN_INFO)：内核打印，dmesg查看\n- module_param(name, type, perm)：模块参数，insmod时传入\n- MODULE_LICENSE("GPL")：必须声明，否则taint\n- ktime_get()：高精度计时，用于性能测量\n\nMakefile核心：obj-m += hello.o，交叉编译需要内核源码路径(KDIR)。', date: '2026-08-14' }
+    ]
+  };
+  saveData();
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+  document.getElementById('panel-' + tab).classList.add('active');
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.tab[data-tab="' + tab + '"]').forEach(function(t) { t.classList.add('active'); });
+  document.querySelectorAll('.mobile-tab').forEach(function(t) { t.classList.remove('active'); });
+  var mt = document.querySelector('.mobile-tab[data-mtab="' + tab + '"]');
+  if (mt) mt.classList.add('active');
+}
+
+function getChapterName(id) {
+  var ch = data.chapters.find(function(c) { return c.id === id; });
+  return ch ? ch.name : '未关联';
+}
+
+function renderBookInfo() {
+  var card = document.getElementById('bookInfoCard');
+  if (!data.bookInfo) { card.style.display = 'none'; return; }
+  var b = data.bookInfo;
+  card.innerHTML = '<div class="book-info-row">' +
+    '<div class="book-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>' +
+    '<div class="book-info-content">' +
+      '<div class="book-title">' + escapeHtml(b.title) + '</div>' +
+      '<div class="book-meta">' +
+        '<span>' + escapeHtml(b.author) + '</span>' +
+        '<span>' + escapeHtml(b.publisher) + ' ' + escapeHtml(b.year) + '</span>' +
+        '<span>ISBN: ' + escapeHtml(b.isbn) + '</span>' +
+      '</div>' +
+      '<div class="book-platforms">硬件平台: ' + escapeHtml(b.platforms) + '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function renderChapters() {
+  var list = document.getElementById('chapterList');
+  if (data.chapters.length === 0) {
+    list.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><p>还没有章节记录，点击上方按钮添加</p></div>';
+    return;
+  }
+  list.innerHTML = data.chapters.map(function(ch, i) {
+    var statusText = { done: '已读', reading: '进行中', pending: '未读' }[ch.status];
+    var expCount = data.experiments.filter(function(e) { return e.chapterId === ch.id; }).length;
+    var noteCount = data.notes.filter(function(n) { return n.chapterId === ch.id; }).length;
+    return '<div class="chapter-card status-' + ch.status + '">' +
+      '<div class="chapter-top">' +
+        '<div class="chapter-name"><span class="chapter-num">' + (i+1) + '</span>' + escapeHtml(ch.name) + '</div>' +
+        '<select class="status-select" onchange="updateChapterStatus(\'' + ch.id + '\', this.value)">' +
+          '<option value="pending"' + (ch.status==='pending'?' selected':'') + '>未读</option>' +
+          '<option value="reading"' + (ch.status==='reading'?' selected':'') + '>进行中</option>' +
+          '<option value="done"' + (ch.status==='done'?' selected':'') + '>已读</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="chapter-detail">' +
+        (ch.dueDate ? '<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>计划: ' + ch.dueDate + '</span>' : '') +
+        '<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>实验: ' + expCount + '</span>' +
+        '<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>笔记: ' + noteCount + '</span>' +
+      '</div>' +
+      (ch.summary ? '<div style="font-size:12px;color:var(--text-sec);margin-top:6px">' + escapeHtml(ch.summary) + '</div>' : '') +
+      '<div class="chapter-actions">' +
+        '<button class="btn btn-sm" onclick="editChapter(\'' + ch.id + '\')">编辑</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="deleteChapter(\'' + ch.id + '\')">删除</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderExperiments() {
+  var list = document.getElementById('expList');
+  if (data.experiments.length === 0) {
+    list.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><p>还没有实验记录，点击上方按钮添加</p></div>';
+    return;
+  }
+  var statusMap = { done: '已完成', progress: '进行中', planned: '计划中' };
+  list.innerHTML = data.experiments.map(function(e) {
+    var isOverdue = e.status !== 'done' && e.dueDate && daysBetween(e.dueDate, todayStr()) < 0;
+    var tagsHtml = '<div class="exp-tags">';
+    if (e.keyAPI) tagsHtml += '<span class="exp-tag api"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>' + escapeHtml(e.keyAPI) + '</span>';
+    if (e.dockerCmd) tagsHtml += '<span class="exp-tag docker">$ ' + escapeHtml(e.dockerCmd) + '</span>';
+    if (e.bookRef) tagsHtml += '<span class="exp-tag book"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>' + escapeHtml(e.bookRef) + '</span>';
+    tagsHtml += '</div>';
+    return '<div class="exp-card">' +
+      '<div class="exp-top">' +
+        '<div class="exp-name">' + escapeHtml(e.name) + '</div>' +
+        '<span class="exp-status ' + e.status + '">' + statusMap[e.status] + (isOverdue ? ' (逾期)' : '') + '</span>' +
+      '</div>' +
+      '<div class="exp-meta">' +
+        '<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>' + escapeHtml(getChapterName(e.chapterId)) + '</span>' +
+        (e.dueDate ? '<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' + e.dueDate + (isOverdue ? ' (逾期' + Math.abs(daysBetween(e.dueDate, todayStr())) + '天)' : '') + '</span>' : '') +
+      '</div>' +
+      (e.desc ? '<div class="exp-desc">' + escapeHtml(e.desc) + '</div>' : '') +
+      tagsHtml +
+      (e.code ? '<div class="exp-code">' + escapeHtml(e.code) + '</div>' : '') +
+      (e.result ? '<div class="exp-result">' + escapeHtml(e.result) + '</div>' : '') +
+      '<div class="exp-actions">' +
+        '<button class="btn btn-sm" onclick="editExperiment(\'' + e.id + '\')">编辑</button>' +
+        (e.status !== 'done' ? '<button class="btn btn-sm btn-primary" onclick="completeExperiment(\'' + e.id + '\')">标记完成</button>' : '') +
+        '<button class="btn btn-sm btn-danger" onclick="deleteExperiment(\'' + e.id + '\')">删除</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderNotes() {
+  var list = document.getElementById('noteList');
+  if (data.notes.length === 0) {
+    list.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>还没有笔记，点击上方按钮添加</p></div>';
+    return;
+  }
+  list.innerHTML = data.notes.map(function(n) {
+    return '<div class="note-card">' +
+      '<div class="note-top">' +
+        '<div class="note-chapter">' + escapeHtml(getChapterName(n.chapterId)) + '</div>' +
+        '<div class="note-date">' + (n.date || '') + '</div>' +
+      '</div>' +
+      '<div class="note-content">' + escapeHtml(n.content) + '</div>' +
+      '<div class="note-actions">' +
+        '<button class="btn btn-sm" onclick="editNote(\'' + n.id + '\')">编辑</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="deleteNote(\'' + n.id + '\')">删除</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderToday() {
+  var today = todayStr();
+  var items = [];
+  data.chapters.forEach(function(ch) {
+    if (ch.status !== 'done' && ch.dueDate) {
+      var days = daysBetween(ch.dueDate, today);
+      if (days <= 0) {
+        items.push({ type: 'read', title: ch.name, meta: '章节', overdue: days < 0, days: Math.abs(days), id: ch.id, dueDate: ch.dueDate });
+      }
+    }
+  });
+  data.experiments.forEach(function(e) {
+    if (e.status !== 'done' && e.dueDate) {
+      var days = daysBetween(e.dueDate, today);
+      if (days <= 0) {
+        items.push({ type: 'exp', title: e.name, meta: getChapterName(e.chapterId), overdue: days < 0, days: Math.abs(days), id: e.id, dueDate: e.dueDate });
+      }
+    }
+  });
+  var list = document.getElementById('todayList');
+  var count = document.getElementById('todayCount');
+  count.textContent = items.length;
+  if (items.length === 0) {
+    list.innerHTML = '<div class="today-empty">今天没有待处理项，继续加油</div>';
+    return;
+  }
+  list.innerHTML = items.map(function(item) {
+    var cls = item.overdue ? 'today-item-overdue' : 'today-item-today';
+    var tag = item.overdue ? '<span class="today-item-tag tag-overdue">逾期' + item.days + '天</span>' : '<span class="today-item-tag tag-today">今天</span>';
+    var typeTag = item.type === 'read' ? '<span class="today-item-tag tag-read">读书</span>' : '<span class="today-item-tag tag-exp">实验</span>';
+    var action = item.type === 'read' ?
+      '<button class="btn btn-sm btn-primary" onclick="quickCompleteChapter(\'' + item.id + '\')">标记已读</button>' :
+      '<button class="btn btn-sm btn-primary" onclick="quickCompleteExp(\'' + item.id + '\')">标记完成</button>';
+    return '<div class="today-item ' + cls + '">' +
+      '<div class="today-item-info">' +
+        '<div class="today-item-title' + (item.overdue ? ' overdue' : '') + '">' + escapeHtml(item.title) + '</div>' +
+        '<div class="today-item-meta">' + typeTag + tag + '<span>' + escapeHtml(item.meta) + '</span><span>截止: ' + item.dueDate + '</span></div>' +
+      '</div>' +
+      '<div class="today-item-actions">' + action + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderStats() {
+  document.getElementById('statRead').textContent = data.chapters.filter(function(c) { return c.status === 'done'; }).length;
+  document.getElementById('statReading').textContent = data.chapters.filter(function(c) { return c.status === 'reading'; }).length;
+  document.getElementById('statExpDone').textContent = data.experiments.filter(function(e) { return e.status === 'done'; }).length;
+  document.getElementById('statNotes').textContent = data.notes.length;
+}
+
+function renderAll() {
+  renderBookInfo();
+  renderChapters();
+  renderExperiments();
+  renderNotes();
+  renderToday();
+  renderStats();
+  populateChapterSelects();
+}
+
+function checkBackupHint() {
+  var total = data.chapters.length + data.experiments.length + data.notes.length;
+  var hint = document.getElementById('backupHint');
+  var text = document.getElementById('backupHintText');
+  if (total >= 30) {
+    hint.style.display = 'flex';
+    text.textContent = '数据已积累 ' + total + ' 条，建议点击上方「导出备份」保存一份本地副本';
+  } else {
+    hint.style.display = 'none';
+  }
+}
+
+function populateChapterSelects() {
+  var options = data.chapters.map(function(c) { return '<option value="' + c.id + '">' + escapeHtml(c.name) + '</option>'; }).join('');
+  document.getElementById('expChapter').innerHTML = options || '<option value="">请先添加章节</option>';
+  document.getElementById('noteChapter').innerHTML = options || '<option value="">请先添加章节</option>';
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function updateChapterStatus(id, status) {
+  var ch = data.chapters.find(function(c) { return c.id === id; });
+  if (ch) { ch.status = status; saveData(); }
+}
+
+function quickCompleteChapter(id) {
+  updateChapterStatus(id, 'done');
+}
+function quickCompleteExp(id) {
+  var e = data.experiments.find(function(x) { return x.id === id; });
+  if (e) { e.status = 'done'; saveData(); }
+}
+function completeExperiment(id) {
+  var e = data.experiments.find(function(x) { return x.id === id; });
+  if (e) { e.status = 'done'; saveData(); }
+}
+
+function openChapterModal() {
+  document.getElementById('chapterModalTitle').textContent = '添加章节';
+  document.getElementById('chapterId').value = '';
+  document.getElementById('chapterName').value = '';
+  document.getElementById('chapterStatus').value = 'pending';
+  document.getElementById('chapterDueDate').value = '';
+  document.getElementById('chapterSummary').value = '';
+  document.getElementById('chapterModal').classList.add('show');
+}
+function editChapter(id) {
+  var ch = data.chapters.find(function(c) { return c.id === id; });
+  if (!ch) return;
+  document.getElementById('chapterModalTitle').textContent = '编辑章节';
+  document.getElementById('chapterId').value = ch.id;
+  document.getElementById('chapterName').value = ch.name;
+  document.getElementById('chapterStatus').value = ch.status;
+  document.getElementById('chapterDueDate').value = ch.dueDate || '';
+  document.getElementById('chapterSummary').value = ch.summary || '';
+  document.getElementById('chapterModal').classList.add('show');
+}
+function saveChapter() {
+  var id = document.getElementById('chapterId').value;
+  var name = document.getElementById('chapterName').value.trim();
+  if (!name) { alert('请输入章节名称'); return; }
+  var ch = {
+    name: name,
+    status: document.getElementById('chapterStatus').value,
+    dueDate: document.getElementById('chapterDueDate').value,
+    summary: document.getElementById('chapterSummary').value.trim()
+  };
+  if (id) {
+    var existing = data.chapters.find(function(c) { return c.id === id; });
+    if (existing) { Object.assign(existing, ch); }
+  } else {
+    ch.id = uid();
+    data.chapters.push(ch);
+  }
+  saveData();
+  closeModal('chapterModal');
+}
+function deleteChapter(id) {
+  data.chapters = data.chapters.filter(function(c) { return c.id !== id; });
+  data.experiments = data.experiments.filter(function(e) { return e.chapterId !== id; });
+  data.notes = data.notes.filter(function(n) { return n.chapterId !== id; });
+  saveData();
+}
+
+function openExpModal() {
+  document.getElementById('expModalTitle').textContent = '添加实验';
+  document.getElementById('expId').value = '';
+  document.getElementById('expName').value = '';
+  document.getElementById('expChapter').value = data.chapters.length > 0 ? data.chapters[0].id : '';
+  document.getElementById('expStatus').value = 'planned';
+  document.getElementById('expDueDate').value = '';
+  document.getElementById('expDesc').value = '';
+  document.getElementById('expKeyAPI').value = '';
+  document.getElementById('expDockerCmd').value = '';
+  document.getElementById('expBookRef').value = '';
+  document.getElementById('expCode').value = '';
+  document.getElementById('expResult').value = '';
+  document.getElementById('expModal').classList.add('show');
+}
+function editExperiment(id) {
+  var e = data.experiments.find(function(x) { return x.id === id; });
+  if (!e) return;
+  document.getElementById('expModalTitle').textContent = '编辑实验';
+  document.getElementById('expId').value = e.id;
+  document.getElementById('expName').value = e.name;
+  document.getElementById('expChapter').value = e.chapterId;
+  document.getElementById('expStatus').value = e.status;
+  document.getElementById('expDueDate').value = e.dueDate || '';
+  document.getElementById('expDesc').value = e.desc || '';
+  document.getElementById('expKeyAPI').value = e.keyAPI || '';
+  document.getElementById('expDockerCmd').value = e.dockerCmd || '';
+  document.getElementById('expBookRef').value = e.bookRef || '';
+  document.getElementById('expCode').value = e.code || '';
+  document.getElementById('expResult').value = e.result || '';
+  document.getElementById('expModal').classList.add('show');
+}
+function saveExperiment() {
+  var id = document.getElementById('expId').value;
+  var name = document.getElementById('expName').value.trim();
+  if (!name) { alert('请输入实验名称'); return; }
+  var e = {
+    name: name,
+    chapterId: document.getElementById('expChapter').value,
+    status: document.getElementById('expStatus').value,
+    dueDate: document.getElementById('expDueDate').value,
+    desc: document.getElementById('expDesc').value.trim(),
+    keyAPI: document.getElementById('expKeyAPI').value.trim(),
+    dockerCmd: document.getElementById('expDockerCmd').value.trim(),
+    bookRef: document.getElementById('expBookRef').value.trim(),
+    code: document.getElementById('expCode').value,
+    result: document.getElementById('expResult').value.trim()
+  };
+  if (id) {
+    var existing = data.experiments.find(function(x) { return x.id === id; });
+    if (existing) { Object.assign(existing, e); }
+  } else {
+    e.id = uid();
+    data.experiments.push(e);
+  }
+  saveData();
+  closeModal('expModal');
+}
+function deleteExperiment(id) {
+  data.experiments = data.experiments.filter(function(e) { return e.id !== id; });
+  saveData();
+}
+
+function openNoteModal() {
+  document.getElementById('noteModalTitle').textContent = '添加笔记';
+  document.getElementById('noteId').value = '';
+  document.getElementById('noteChapter').value = data.chapters.length > 0 ? data.chapters[0].id : '';
+  document.getElementById('noteContent').value = '';
+  document.getElementById('noteModal').classList.add('show');
+}
+function editNote(id) {
+  var n = data.notes.find(function(x) { return x.id === id; });
+  if (!n) return;
+  document.getElementById('noteModalTitle').textContent = '编辑笔记';
+  document.getElementById('noteId').value = n.id;
+  document.getElementById('noteChapter').value = n.chapterId;
+  document.getElementById('noteContent').value = n.content;
+  document.getElementById('noteModal').classList.add('show');
+}
+function saveNote() {
+  var id = document.getElementById('noteId').value;
+  var content = document.getElementById('noteContent').value.trim();
+  if (!content) { alert('请输入笔记内容'); return; }
+  var n = {
+    chapterId: document.getElementById('noteChapter').value,
+    content: content,
+    date: todayStr()
+  };
+  if (id) {
+    var existing = data.notes.find(function(x) { return x.id === id; });
+    if (existing) { existing.chapterId = n.chapterId; existing.content = n.content; }
+  } else {
+    n.id = uid();
+    data.notes.push(n);
+  }
+  saveData();
+  closeModal('noteModal');
+}
+function deleteNote(id) {
+  data.notes = data.notes.filter(function(n) { return n.id !== id; });
+  saveData();
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+function exportData() {
+  var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'embedded_linux_book_' + todayStr() + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var imported = JSON.parse(e.target.result);
+      if (!imported.chapters || !imported.experiments || !imported.notes) {
+        alert('文件格式不正确');
+        return;
+      }
+      data = imported;
+      saveData();
+      alert('导入成功！共恢复 ' + data.chapters.length + ' 条章节、' + data.experiments.length + ' 条实验、' + data.notes.length + ' 条笔记');
+    } catch(err) {
+      alert('导入失败：' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function confirmClear() {
+  document.getElementById('confirmText').textContent = '将清空全部 ' + (data.chapters.length + data.experiments.length + data.notes.length) + ' 条数据，包括章节、实验和笔记。此操作不可撤销！';
+  document.getElementById('confirmDialog').classList.add('show');
+  document.getElementById('confirmBtn').onclick = function() {
+    data = { chapters: [], experiments: [], notes: [], bookInfo: null, dataVersion: DATA_VERSION };
+    saveData();
+    closeConfirm();
+  };
+}
+function closeConfirm() { document.getElementById('confirmDialog').classList.remove('show'); }
+
+document.querySelectorAll('.modal-overlay').forEach(function(m) {
+  m.addEventListener('click', function(e) { if (e.target === m) m.classList.remove('show'); });
+});
+
+loadData();
+renderAll();
+checkBackupHint();
+</script>
+</body>
+</html>
