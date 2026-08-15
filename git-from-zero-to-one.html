@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Git 从 0 到 1 — 从概念到推送全流程详解</title>
+<style>
+  :root {
+    --glass: rgba(255, 255, 255, 0.55);
+    --glass-strong: rgba(255, 255, 255, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.65);
+    --text: #2c4633;
+    --text-muted: #5f7a66;
+    --green: #1f7a4d;
+    --teal: #0e8a6d;
+    --cyan: #1f7a4d;
+    --violet: #4a8a5c;
+    --amber: #b07818;
+    --red: #c05a50;
+    --code-bg: #24402f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: #cfe8d0;
+    color: var(--text);
+    line-height: 1.75;
+    font-size: 15px;
+    min-height: 100vh;
+  }
+  .bg-orbs {
+    position: fixed; inset: 0; z-index: -1; overflow: hidden;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(255, 255, 255, 0.55), transparent 60%),
+      radial-gradient(ellipse 60% 45% at 90% 15%, rgba(174, 213, 170, 0.45), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 50% 110%, rgba(190, 227, 190, 0.5), transparent 60%),
+      linear-gradient(160deg, #d6eed8 0%, #c6e3c9 50%, #bcdcbc 100%);
+  }
+  .orb { position: absolute; border-radius: 50%; filter: blur(90px); opacity: 0.4; }
+  .orb-1 { width: 480px; height: 480px; background: #eaf6ea; top: -120px; left: -100px; }
+  .orb-2 { width: 380px; height: 380px; background: #a8d4a8; top: 30%; right: -140px; opacity: 0.28; }
+  .orb-3 { width: 420px; height: 420px; background: #cde8cd; bottom: -160px; left: 25%; opacity: 0.3; }
+  .bg-grid {
+    position: fixed; inset: 0; z-index: -1;
+    background-image:
+      linear-gradient(rgba(31, 122, 77, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(31, 122, 77, 0.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 80%);
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 48px 24px 90px; }
+  .glass {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 18px;
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    box-shadow: 0 8px 28px rgba(90, 130, 95, 0.18);
+  }
+  header.hero {
+    padding: 42px 36px; margin-bottom: 40px; position: relative; overflow: hidden;
+  }
+  header.hero::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(120deg, rgba(255,255,255,0.35), transparent 40%, rgba(174, 213, 170, 0.25));
+    pointer-events: none;
+  }
+  header.hero h1 {
+    font-size: 28px; font-weight: 700; margin-bottom: 10px;
+    background: linear-gradient(90deg, #1c5c38, #2e8b57);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    position: relative;
+  }
+  header.hero p.sub { color: var(--text-muted); font-size: 14px; position: relative; }
+  header.hero .chips { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; position: relative; }
+  .chip {
+    font-size: 12px; padding: 3px 12px; border-radius: 999px;
+    border: 1px solid rgba(31, 122, 77, 0.3); color: var(--green);
+    background: rgba(255, 255, 255, 0.6); font-family: "SF Mono", Menlo, monospace;
+  }
+  nav.toc { padding: 22px 26px; margin-bottom: 48px; }
+  nav.toc h2 {
+    font-size: 14px; font-weight: 600; margin-bottom: 12px;
+    color: var(--green); letter-spacing: 2px; text-transform: uppercase;
+  }
+  nav.toc ol { padding-left: 20px; column-count: 2; column-gap: 36px; }
+  nav.toc li { margin: 5px 0; break-inside: avoid; }
+  nav.toc a { color: var(--text); text-decoration: none; font-size: 14px; transition: color .15s; }
+  nav.toc a:hover { color: var(--green); }
+  nav.toc a .sec-no { color: #4a8a5c; font-family: "SF Mono", Menlo, monospace; font-size: 12px; margin-right: 6px; }
+  section { margin-bottom: 56px; }
+  h2.step {
+    font-size: 21px; font-weight: 700; margin-bottom: 22px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  h2.step .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, rgba(46, 139, 87, 0.18), rgba(14, 138, 109, 0.18));
+    border: 1px solid rgba(31, 122, 77, 0.4);
+    color: var(--green); font-size: 15px; font-weight: 700;
+    font-family: "SF Mono", Menlo, monospace;
+    box-shadow: 0 0 14px rgba(46, 139, 87, 0.2); flex-shrink: 0;
+  }
+  h3 { font-size: 16px; font-weight: 600; margin: 26px 0 12px; color: #274d33; }
+  p { margin-bottom: 12px; }
+  ul, ol { padding-left: 24px; margin-bottom: 12px; }
+  li { margin: 5px 0; }
+  strong { color: #1c4a2e; }
+  .cmd-block {
+    margin: 16px 0 8px; border-radius: 14px; overflow: hidden;
+    border: 1px solid rgba(31, 122, 77, 0.3);
+    box-shadow: 0 6px 20px rgba(90, 130, 95, 0.2);
+  }
+  .cmd-block .label {
+    font-size: 12px; padding: 8px 16px;
+    background: rgba(199, 231, 203, 0.85);
+    color: var(--green); font-weight: 600;
+    border-bottom: 1px solid rgba(31, 122, 77, 0.2);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .cmd-block .label::before { content: ">"; color: #0e8a6d; font-family: Menlo, monospace; }
+  .cmd-block pre { border-radius: 0; margin: 0; border: none; }
+  pre {
+    background: var(--code-bg); color: #e4f2e6;
+    padding: 13px 16px; overflow-x: auto;
+    font-size: 13.5px; line-height: 1.65;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    border-radius: 12px; border: 1px solid rgba(31, 61, 40, 0.5);
+    position: relative;
+  }
+  pre .comment { color: #9ec3a6; font-style: italic; }
+  pre .cmd-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 1px 0; min-height: 1.65em;
+  }
+  pre .cmd-row .cmd-text {
+    flex: 1; white-space: pre; overflow: hidden; text-overflow: ellipsis;
+  }
+  pre .cmd-row.is-comment .cmd-text { color: #9ec3a6; font-style: italic; opacity: 0.85; }
+  pre .cmd-row.is-blank { min-height: 0.7em; }
+  .copy-btn {
+    flex-shrink: 0; padding: 2px 10px; font-size: 11.5px;
+    font-family: -apple-system, "PingFang SC", sans-serif;
+    color: #d8ecd9; background: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 6px;
+    cursor: pointer; opacity: 0;
+    transition: opacity .15s, background .15s, color .15s;
+    -webkit-user-select: none; user-select: none; line-height: 1.5;
+  }
+  pre .cmd-row:hover .copy-btn,
+  .copy-btn:focus-visible,
+  .copy-btn.copied { opacity: 1; }
+  .copy-btn:hover { background: rgba(255, 255, 255, 0.22); }
+  .copy-btn.copied { color: #a8e6b8; border-color: rgba(110, 200, 140, 0.5); background: rgba(46, 139, 87, 0.35); opacity: 1; }
+  .cmd-explain {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-left: 3px solid #2e8b57;
+    border-radius: 0 14px 14px 0;
+    backdrop-filter: blur(14px);
+    padding: 14px 18px; margin-bottom: 22px; font-size: 14px;
+  }
+  .cmd-explain ul { padding-left: 18px; margin: 6px 0 0; }
+  .cmd-explain li { margin: 4px 0; }
+  .cmd-explain code { background: rgba(46, 139, 87, 0.14); color: #1c6240; padding: 1px 6px; border-radius: 5px; font-size: 12.5px; font-family: "SF Mono", Menlo, monospace; }
+  code.inline {
+    background: rgba(255, 255, 255, 0.65); color: #1c6240;
+    padding: 1px 7px; border-radius: 5px;
+    font-family: "SF Mono", Menlo, monospace; font-size: 13px;
+    border: 1px solid rgba(31, 122, 77, 0.22);
+  }
+  .note, .warn, .tip {
+    border-radius: 14px; padding: 15px 19px; margin: 16px 0;
+    font-size: 14px; backdrop-filter: blur(14px); border: 1px solid;
+  }
+  .note { background: rgba(46, 139, 87, 0.10); border-color: rgba(46, 139, 87, 0.4); }
+  .warn { background: rgba(192, 90, 80, 0.08); border-color: rgba(192, 90, 80, 0.38); }
+  .tip  { background: rgba(176, 120, 24, 0.08); border-color: rgba(176, 120, 24, 0.38); }
+  .note strong { display: block; margin-bottom: 5px; color: #1f7a4d; }
+  .warn strong { display: block; margin-bottom: 5px; color: #b04a42; }
+  .tip  strong { display: block; margin-bottom: 5px; color: #9c6c12; }
+  .note pre, .warn pre, .tip pre { margin: 8px 0; }
+  .table-wrap { overflow-x: auto; border-radius: 14px; border: 1px solid rgba(255,255,255,0.7); margin: 16px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; backdrop-filter: blur(14px); }
+  th, td { padding: 10px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid rgba(31, 122, 77, 0.12); }
+  tr:last-child td { border-bottom: none; }
+  th { background: rgba(199, 231, 203, 0.6); font-weight: 600; color: #1c5c38; white-space: nowrap; }
+  td { background: rgba(255, 255, 255, 0.35); color: #334f39; }
+  td code, th code {
+    font-family: "SF Mono", Menlo, monospace; font-size: 12px;
+    background: rgba(46, 139, 87, 0.12); color: #1c6240;
+    padding: 1px 5px; border-radius: 4px;
+  }
+  .flow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 18px 0; }
+  .flow .node {
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(31, 122, 77, 0.35);
+    border-radius: 10px; padding: 7px 15px;
+    font-size: 13px; font-weight: 600; color: #24523a;
+    white-space: nowrap; backdrop-filter: blur(8px);
+    box-shadow: 0 2px 10px rgba(90, 130, 95, 0.15);
+  }
+  .flow .arrow { color: #2e8b57; font-size: 15px; }
+  details {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 14px; padding: 0; margin: 12px 0;
+    backdrop-filter: blur(14px); overflow: hidden; transition: border-color .2s;
+  }
+  details:hover { border-color: rgba(46, 139, 87, 0.4); }
+  details[open] { border-color: rgba(46, 139, 87, 0.5); }
+  details summary {
+    cursor: pointer; font-weight: 600; font-size: 14px;
+    padding: 14px 18px; list-style: none; position: relative;
+    color: #2c4633; user-select: none;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before {
+    content: ">"; color: var(--green); margin-right: 10px;
+    display: inline-block; transition: transform .2s;
+  }
+  details[open] summary::before { transform: rotate(90deg); }
+  details .body { padding: 2px 18px 16px 32px; font-size: 14px; }
+  .svg-box {
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(31, 122, 77, 0.25);
+    border-radius: 14px; padding: 16px; margin: 18px 0;
+    backdrop-filter: blur(14px); overflow-x: auto;
+  }
+  .svg-box .svg-title {
+    font-size: 13px; font-weight: 600; color: var(--green);
+    margin-bottom: 10px; text-align: center;
+  }
+  .svg-box svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+  footer {
+    margin-top: 70px; padding-top: 24px;
+    border-top: 1px solid rgba(31, 122, 77, 0.2);
+    color: var(--text-muted); font-size: 13px; text-align: center;
+  }
+  @media (max-width: 640px) {
+    nav.toc ol { column-count: 1; }
+    .wrap { padding: 24px 14px 60px; }
+    header.hero { padding: 28px 22px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+<div class="bg-grid"></div>
+
+<div class="wrap">
+
+<header class="hero glass">
+  <h1>Git 从 0 到 1 全流程详解</h1>
+  <p class="sub">从"什么是版本控制"到"推送代码到 GitHub" · 每步配图解 · 每条命令附说明</p>
+  <p class="sub">基于真实 SAMA5D27 项目推送 GitHub 的实战经历整理</p>
+  <div class="chips">
+    <span class="chip">Git</span>
+    <span class="chip">GitHub</span>
+    <span class="chip">SSH</span>
+    <span class="chip">公钥/私钥</span>
+    <span class="chip">分支</span>
+  </div>
+</header>
+
+<nav class="toc glass">
+  <h2>目录 Contents</h2>
+  <ol>
+    <li><a href="#what-is-git"><span class="sec-no">01</span>什么是 Git？为什么需要它？</a></li>
+    <li><a href="#three-areas"><span class="sec-no">02</span>Git 三大区域：工作区 / 暂存区 / 仓库</a></li>
+    <li><a href="#init"><span class="sec-no">03</span>git init：给文件夹开一本账本</a></li>
+    <li><a href="#add"><span class="sec-no">04</span>git add：标记变化（含 -A 详解）</a></li>
+    <li><a href="#commit"><span class="sec-no">05</span>git commit：拍一张快照</a></li>
+    <li><a href="#remote"><span class="sec-no">06</span>git remote：关联 GitHub 仓库</a></li>
+    <li><a href="#ssh-keys"><span class="sec-no">07</span>公钥与私钥：原理与关系</a></li>
+    <li><a href="#ssh-auth"><span class="sec-no">08</span>SSH 认证全过程：6 步签名流程</a></li>
+    <li><a href="#push"><span class="sec-no">09</span>git push：推送到 GitHub</a></li>
+    <li><a href="#push-output"><span class="sec-no">10</span>终端输出逐行解读</a></li>
+    <li><a href="#branch"><span class="sec-no">11</span>分支：同时干多件事</a></li>
+    <li><a href="#full-flow"><span class="sec-no">12</span>完整推送流程：4 步实战</a></li>
+    <li><a href="#faq"><span class="sec-no">13</span>常见问题 FAQ</a></li>
+  </ol>
+</nav>
+
+<!-- ==================== 1. 什么是 Git ==================== -->
+<section id="what-is-git">
+  <h2 class="step"><span class="num">1</span>什么是 Git？为什么需要它？</h2>
+
+  <p>你写了一个 HTML 文件，改了又改，最后搞不清楚哪个版本是最新版。手动复制备份？<code class="inline">guide_v1.html</code>、<code class="inline">guide_v2_final.html</code>、<code class="inline">guide_v2_final_really_final.html</code>……是不是很熟悉？</p>
+
+  <p><strong>Git 就是一个自动帮你记录每次修改的"时光机"。</strong>它不是备份软件，而是<strong>版本控制系统</strong>——每次你改完文件，告诉 Git "记一下"，它就把当前所有文件的状态拍一张"快照"存起来。以后随时可以回到任何一个历史版本。</p>
+
+  <div class="note">
+    <strong>一句话理解 Git</strong>
+    Git = 一本能自动记录每次改动的账本。你只管改文件，Git 负责记住"谁在什么时候改了什么"。
+  </div>
+
+  <div class="flow">
+    <div class="node">普通文件夹<br><small>一堆文件，改了就覆盖</small></div>
+    <span class="arrow">--></span>
+    <div class="node">git init<br><small>给文件夹开一本账本</small></div>
+    <span class="arrow">--></span>
+    <div class="node">Git 仓库<br><small>每次改动都有记录</small></div>
+  </div>
+</section>
+
+<!-- ==================== 2. 三大区域 ==================== -->
+<section id="three-areas">
+  <h2 class="step"><span class="num">2</span>Git 三大区域：工作区 / 暂存区 / 仓库</h2>
+
+  <p>理解 Git 最关键的一步，就是搞清楚它的三个区域。文件从"改了"到"正式记录"，要经过三个地方：</p>
+
+  <div class="svg-box">
+    <div class="svg-title">Git 三大区域：文件的变化之旅</div>
+    <svg viewBox="0 0 680 300" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <style>
+        .b1 { font-family: -apple-system, sans-serif; font-size: 14px; font-weight: 500; }
+        .b2 { font-family: -apple-system, sans-serif; font-size: 12px; }
+        .b3 { font-family: "SF Mono", monospace; font-size: 12px; }
+      </style>
+
+      <!-- 工作区 -->
+      <rect x="20" y="60" width="170" height="120" rx="12" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
+      <text class="b1" x="105" y="90" text-anchor="middle" fill="#0C447C">工作区</text>
+      <text class="b1" x="105" y="110" text-anchor="middle" fill="#0C447C">Working Directory</text>
+      <line x1="40" y1="122" x2="170" y2="122" stroke="#85B7EB" stroke-width="0.5"/>
+      <text class="b2" x="105" y="142" text-anchor="middle" fill="#444441">你正在编辑的文件</text>
+      <text class="b2" x="105" y="160" text-anchor="middle" fill="#444441">改了就是改了</text>
+      <text class="b2" x="105" y="178" text-anchor="middle" fill="#5F5E5A">Git 还不知道</text>
+
+      <!-- 箭头 1 -->
+      <line x1="190" y1="120" x2="250" y2="120" stroke="#534AB7" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <text class="b3" x="220" y="110" text-anchor="middle" fill="#534AB7">git add</text>
+      <text class="b2" x="220" y="138" text-anchor="middle" fill="#5F5E5A">标记变化</text>
+
+      <!-- 暂存区 -->
+      <rect x="255" y="60" width="170" height="120" rx="12" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+      <text class="b1" x="340" y="90" text-anchor="middle" fill="#3C3489">暂存区</text>
+      <text class="b1" x="340" y="110" text-anchor="middle" fill="#3C3489">Staging Area</text>
+      <line x1="275" y1="122" x2="405" y2="122" stroke="#AFA9EC" stroke-width="0.5"/>
+      <text class="b2" x="340" y="142" text-anchor="middle" fill="#444441">被标记的文件</text>
+      <text class="b2" x="340" y="160" text-anchor="middle" fill="#444441">等着被拍快照</text>
+      <text class="b2" x="340" y="178" text-anchor="middle" fill="#5F5E5A">还没正式记录</text>
+
+      <!-- 箭头 2 -->
+      <line x1="425" y1="120" x2="485" y2="120" stroke="#0F6E56" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <text class="b3" x="455" y="110" text-anchor="middle" fill="#0F6E56">git commit</text>
+      <text class="b2" x="455" y="138" text-anchor="middle" fill="#5F5E5A">拍快照</text>
+
+      <!-- 仓库 -->
+      <rect x="490" y="60" width="170" height="120" rx="12" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="b1" x="575" y="90" text-anchor="middle" fill="#085041">本地仓库</text>
+      <text class="b1" x="575" y="110" text-anchor="middle" fill="#085041">Repository</text>
+      <line x1="510" y1="122" x2="640" y2="122" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="b2" x="575" y="142" text-anchor="middle" fill="#444441">正式记录的快照</text>
+      <text class="b2" x="575" y="160" text-anchor="middle" fill="#444441">有唯一 ID</text>
+      <text class="b2" x="575" y="178" text-anchor="middle" fill="#5F5E5A">可以推送到 GitHub</text>
+
+      <!-- 底部说明 -->
+      <rect x="20" y="210" width="640" height="72" rx="10" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+      <text class="b2" x="36" y="234" fill="#444441">打个比方：</text>
+      <text class="b2" x="36" y="254" fill="#444441">工作区 = 你的书桌（文件摊在上面随便改）</text>
+      <text class="b2" x="36" y="272" fill="#444441">暂存区 = 购物车（选好了要买的东西，还没结账）  仓库 = 订单已确认（正式记录，改不了了）</text>
+    </svg>
+  </div>
+
+  <div class="tip">
+    <strong>为什么要三个区域？</strong>
+    如果只有"工作区"和"仓库"，你每改一个文件就得立刻 commit，太烦了。有了暂存区，你可以先改 5 个文件，add 进暂存区，最后一次 commit 把它们打包成一条记录。灵活又干净。
+  </div>
+</section>
+
+<!-- ==================== 3. git init ==================== -->
+<section id="init">
+  <h2 class="step"><span class="num">3</span>git init：给文件夹开一本账本</h2>
+
+  <p>你 Mac 上有一个普通文件夹，里面放着 HTML 文件。GitHub 不认识它，也没法推送。需要先把它变成 Git 仓库。</p>
+
+  <div class="cmd-block">
+    <div class="label">进入文件夹并初始化</div>
+    <pre>
+cd ~/sama5/sama5d27-docker-guide
+git init
+    </pre>
+  </div>
+
+  <div class="cmd-explain">
+    <ul>
+      <li><code>cd ~/sama5/sama5d27-docker-guide</code> — 进入你要管理的文件夹</li>
+      <li><code>git init</code> — 给这个文件夹"开一本账本"。执行后，Git 会在文件夹里创建一个隐藏的 <code>.git</code> 目录，用来存储所有版本记录。从这一刻起，这个文件夹就不再是普通文件夹，而是<strong>Git 仓库</strong>了。</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <strong>git init 只需要做一次</strong>
+    初始化之后，这个文件夹永远是 Git 仓库，以后不用再 init 了。
+  </div>
+</section>
+
+<!-- ==================== 4. git add ==================== -->
+<section id="add">
+  <h2 class="step"><span class="num">4</span>git add：标记变化（含 -A 详解）</h2>
+
+  <p>你改了文件，但 Git 还不知道。需要用 <code class="inline">git add</code> 告诉 Git："这些文件变了，待会 commit 时记上。"</p>
+
+  <div class="cmd-block">
+    <div class="label">标记所有变化</div>
+    <pre>
+git add -A
+    </pre>
+  </div>
+
+  <div class="cmd-explain">
+    <ul>
+      <li><code>git add -A</code> — <code>-A</code> 是 <code>--all</code> 的缩写，意思是"把所有变化都标记"。Git 会自动扫描整个仓库目录，发现哪些文件变了（不管是改了、加了还是删了），全部标记上。</li>
+    </ul>
+  </div>
+
+  <h3>-A 到底抓了哪些变化？具体例子</h3>
+
+  <p>假设你的仓库目录里有三个文件，你做了三个操作：</p>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>操作</th><th>文件</th><th>变化类型</th></tr>
+      <tr><td>改了 HTML 里的内容</td><td><code>guide.html</code></td><td>修改 (Modified)</td></tr>
+      <tr><td>新建了一个文件</td><td><code>notes.txt</code></td><td>新增 (Added)</td></tr>
+      <tr><td>删掉了旧文件</td><td><code>old-version.html</code></td><td>删除 (Deleted)</td></tr>
+    </table>
+  </div>
+
+  <p><strong>不加 -A 的情况：</strong>你得手动一条条加：</p>
+
+  <div class="cmd-block">
+    <div class="label">逐个标记（麻烦）</div>
+    <pre>
+git add guide.html
+git add notes.txt
+git rm old-version.html
+    </pre>
+  </div>
+
+  <p>三个操作，三条命令，漏一条就少记录一个变化。</p>
+
+  <p><strong>加 -A 的情况：</strong>一条命令，三种变化全部自动标记：</p>
+
+  <div class="cmd-block">
+    <div class="label">一条搞定（推荐）</div>
+    <pre>
+git add -A
+    </pre>
+  </div>
+
+  <div class="note">
+    <strong>一句话理解 -A</strong>
+    "别让我一条条指定了，你自己扫一遍，所有变的都给我标记上。" 省事，不遗漏。
+  </div>
+
+  <div class="warn">
+    <strong>add 之后文件没有正式记录</strong>
+    <code>git add</code> 只是把文件从"工作区"搬到"暂存区"，打了个标记。Git 还没有正式记录这次变化。需要 <code>git commit</code> 才会真正拍快照。
+  </div>
+</section>
+
+<!-- ==================== 5. git commit ==================== -->
+<section id="commit">
+  <h2 class="step"><span class="num">5</span>git commit：拍一张快照</h2>
+
+  <p><code class="inline">git add</code> 只是标记了"哪些文件变了"，<code class="inline">git commit</code> 才是正式把这些变化"拍一张快照"记录下来。</p>
+
+  <div class="cmd-block">
+    <div class="label">提交快照</div>
+    <pre>
+git commit -m "完善 nohup 命令拆解、重定向讲解"
+    </pre>
+  </div>
+
+  <div class="cmd-explain">
+    <ul>
+      <li><code>git commit</code> — 把暂存区里标记的文件"拍一张快照"存到本地仓库</li>
+      <li><code>-m "说明"</code> — <code>-m</code> 是 message 的缩写，后面的引号里写这次改了什么。这条说明会永久记录在 Git 历史里，方便以后查看。</li>
+    </ul>
+  </div>
+
+  <h3>每次 commit 会生成什么？</h3>
+
+  <p>每次 commit，Git 会生成 5 样东西：</p>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>项目</th><th>说明</th><th>实际例子</th></tr>
+      <tr><td>快照 ID</td><td>Git 根据内容算出的唯一编号</td><td><code>e15612d</code></td></tr>
+      <tr><td>时间</td><td>提交的时间戳</td><td>2026-08-15 22:05:34</td></tr>
+      <tr><td>作者</td><td>谁提交的</td><td>alan &lt;yucheng_studio@163.com&gt;</td></tr>
+      <tr><td>说明</td><td>你写的 -m 内容</td><td>"完善 nohup 命令拆解"</td></tr>
+      <tr><td>文件变化</td><td>哪些文件改了多少行</td><td>index.html +134 -1</td></tr>
+    </table>
+  </div>
+
+  <h3>快照 ID 是怎么算出来的？</h3>
+
+  <p>快照 ID（如 <code class="inline">e15612d</code>）是 Git 根据文件内容、时间、作者等信息用哈希算法算出来的。<strong>内容只要有一个字不一样，ID 就完全不同。</strong>所以它是全球唯一的，不会重复。</p>
+
+  <p>完整 ID 是 40 位十六进制：<code class="inline">e15612d2e502bf8a72b437d770b84e6deb44e79a</code>。日常使用只看前 7 位 <code class="inline">e15612d</code>，足够区分。</p>
+
+  <h3>快照历史链</h3>
+
+  <p>每次 commit 都会指向上一次的 commit，形成一条链：</p>
+
+  <div class="svg-box">
+    <div class="svg-title">commit 历史链示意图</div>
+    <svg viewBox="0 0 680 160" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <style>
+        .ct { font-family: "SF Mono", monospace; font-size: 13px; font-weight: 500; }
+        .cs { font-family: -apple-system, sans-serif; font-size: 11px; }
+      </style>
+
+      <rect x="20" y="40" width="120" height="56" rx="10" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+      <text class="ct" x="80" y="62" text-anchor="middle" fill="#3C3489">e1d6798</text>
+      <text class="cs" x="80" y="82" text-anchor="middle" fill="#5F5E5A">第一版</text>
+
+      <line x1="140" y1="68" x2="170" y2="68" stroke="#AFA9EC" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+      <rect x="175" y="40" width="120" height="56" rx="10" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+      <text class="ct" x="235" y="62" text-anchor="middle" fill="#3C3489">25831de</text>
+      <text class="cs" x="235" y="82" text-anchor="middle" fill="#5F5E5A">第二版</text>
+
+      <line x1="295" y1="68" x2="325" y2="68" stroke="#AFA9EC" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+      <rect x="330" y="40" width="120" height="56" rx="10" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+      <text class="ct" x="390" y="62" text-anchor="middle" fill="#3C3489">e15612d</text>
+      <text class="cs" x="390" y="82" text-anchor="middle" fill="#5F5E5A">第三版</text>
+
+      <line x1="450" y1="68" x2="480" y2="68" stroke="#AFA9EC" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+      <rect x="485" y="40" width="120" height="56" rx="10" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="ct" x="545" y="62" text-anchor="middle" fill="#085041">b6b1926</text>
+      <text class="cs" x="545" y="82" text-anchor="middle" fill="#0F6E56">最新版</text>
+
+      <text class="cs" x="340" y="130" text-anchor="middle" fill="#5F5E5A">每个 commit 指向前一个，形成历史链。可以随时回到任何一个版本。</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ==================== 6. git remote ==================== -->
+<section id="remote">
+  <h2 class="step"><span class="num">6</span>git remote：关联 GitHub 仓库</h2>
+
+  <p>本地仓库建好了，但 GitHub 上还不知道有这个仓库。需要用 <code class="inline">git remote add</code> 把本地仓库和 GitHub 仓库关联起来。</p>
+
+  <div class="cmd-block">
+    <div class="label">关联远程仓库（只需做一次）</div>
+    <pre>
+git remote add origin git@github.com:yuchengstudio/embedded-linux-lab.git
+    </pre>
+  </div>
+
+  <div class="cmd-explain">
+    <ul>
+      <li><code>git remote add</code> — 添加一个远程仓库地址</li>
+      <li><code>origin</code> — 给这个远程仓库起的别名。以后写 <code>origin</code> 就代表这个地址，不用每次写完整 URL。</li>
+      <li><code>git@github.com:...</code> — GitHub 仓库的 SSH 地址。注意是 <code>git@</code> 开头，不是 <code>https://</code> 开头。</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <strong>HTTPS vs SSH 地址</strong>
+    <p>GitHub 仓库有两种地址：</p>
+    <ul>
+      <li><strong>HTTPS</strong>：<code>https://github.com/用户名/仓库名.git</code> — 每次推送要输用户名和 Token</li>
+      <li><strong>SSH</strong>：<code>git@github.com:用户名/仓库名.git</code> — 用密钥自动认证，不用输密码</li>
+    </ul>
+    <p>如果你用 <code>gh auth login</code> 登录时选了 SSH，远程地址就必须用 SSH 格式，否则推不了。</p>
+  </div>
+
+  <div class="cmd-block">
+    <div class="label">如果配错了，改成 SSH 格式</div>
+    <pre>
+git remote set-url origin git@github.com:yuchengstudio/embedded-linux-lab.git
+    </pre>
+  </div>
+</section>
+
+<!-- ==================== 7. 公钥与私钥 ==================== -->
+<section id="ssh-keys">
+  <h2 class="step"><span class="num">7</span>公钥与私钥：原理与关系</h2>
+
+  <p>在讲 <code class="inline">git push</code> 之前，必须先搞懂 SSH 认证的核心——公钥和私钥。因为每次 push，GitHub 都要确认"你是不是本人"。</p>
+
+  <h3>密钥对：一对出生的孪生兄弟</h3>
+
+  <p>你跑 <code class="inline">ssh-keygen</code>（或 <code class="inline">gh auth login</code> 时自动执行）时，一次性生成了两个文件：</p>
+
+  <div class="svg-box">
+    <div class="svg-title">公钥与私钥的关系</div>
+    <svg viewBox="0 0 680 280" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .kt { font-family: -apple-system, sans-serif; font-size: 14px; font-weight: 500; }
+        .ks { font-family: "SF Mono", monospace; font-size: 11px; }
+        .kd { font-family: -apple-system, sans-serif; font-size: 12px; }
+      </style>
+
+      <!-- 生成动作 -->
+      <rect x="250" y="16" width="180" height="32" rx="8" fill="#534AB7" stroke="none"/>
+      <text x="340" y="32" text-anchor="middle" dominant-baseline="central" fill="#fff" font-size="13" font-weight="500" font-family="-apple-system, sans-serif">ssh-keygen 生成密钥对</text>
+      <text class="kd" x="340" y="62" text-anchor="middle" fill="#5F5E5A">一次生成，出来两个，天生配对</text>
+
+      <!-- 私钥 -->
+      <rect x="40" y="80" width="280" height="100" rx="10" fill="#CECBF6" stroke="#7F77DD" stroke-width="0.5"/>
+      <text class="kt" x="180" y="102" text-anchor="middle" fill="#3C3489">私钥 Private Key</text>
+      <text class="ks" x="180" y="122" text-anchor="middle" fill="#3C3489">~/.ssh/id_ed25519</text>
+      <line x1="60" y1="134" x2="300" y2="134" stroke="#AFA9EC" stroke-width="0.5"/>
+      <text class="kd" x="180" y="150" text-anchor="middle" fill="#444441">留在你的 Mac 上</text>
+      <text class="kd" x="180" y="168" text-anchor="middle" fill="#A32D2D">绝不给任何人！</text>
+
+      <!-- 公钥 -->
+      <rect x="360" y="80" width="280" height="100" rx="10" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="kt" x="500" y="102" text-anchor="middle" fill="#085041">公钥 Public Key</text>
+      <text class="ks" x="500" y="122" text-anchor="middle" fill="#085041">id_ed25519.pub</text>
+      <line x1="380" y1="134" x2="620" y2="134" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="kd" x="500" y="150" text-anchor="middle" fill="#444441">上传到 GitHub 服务器</text>
+      <text class="kd" x="500" y="168" text-anchor="middle" fill="#085041">谁都能看，不怕泄露</text>
+
+      <!-- 配对线 -->
+      <line x1="320" y1="130" x2="360" y2="130" stroke="#7F77DD" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+      <!-- 核心关系 -->
+      <rect x="40" y="200" width="600" height="64" rx="10" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+      <text class="kd" x="56" y="222" fill="#444441">核心关系：用私钥锁（签名）的东西，只有配对的公钥能开（验证）</text>
+      <text class="kd" x="56" y="244" fill="#444441">用公钥锁的东西，只有配对的私钥能开 — 这就是"非对称加密"</text>
+    </svg>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th></th><th>私钥 Private Key</th><th>公钥 Public Key</th></tr>
+      <tr><td>文件名</td><td><code>id_ed25519</code></td><td><code>id_ed25519.pub</code></td></tr>
+      <tr><td>存在哪</td><td>你的 Mac 上</td><td>GitHub 服务器上</td></tr>
+      <tr><td>能给别人吗</td><td><strong style="color:#c05a50">绝不</strong></td><td><strong style="color:#1f7a4d">随便给</strong></td></tr>
+      <tr><td>作用</td><td>签名（证明你是谁）</td><td>验证（检查签名真伪）</td></tr>
+      <tr><td>丢了怎么办</td><td>别人能冒充你！</td><td>重新上传就行</td></tr>
+    </table>
+  </div>
+
+  <div class="tip">
+    <strong>用印章打比方</strong>
+    <p>私钥 = 你的私人印章，留在手里不外借</p>
+    <p>公钥 = 验印章的模具，给对方用来验真伪</p>
+    <p>你用印章盖个印（签名），对方拿模具对一下（验证），对上了就确认是你。印章全程在你手里。</p>
+  </div>
+</section>
+
+<!-- ==================== 8. SSH 认证全过程 ==================== -->
+<section id="ssh-auth">
+  <h2 class="step"><span class="num">8</span>SSH 认证全过程：6 步签名流程</h2>
+
+  <p>公钥私钥搞懂了，接下来看每次 <code class="inline">git push</code> 时，Mac 和 GitHub 之间到底发生了什么。这个过程叫 <strong>Challenge-Response（挑战-响应）认证</strong>。</p>
+
+  <div class="svg-box">
+    <div class="svg-title">SSH 签名认证：6 步流程（用具体数据演示）</div>
+    <svg viewBox="0 0 680 1120" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <style>
+        .st { font-family: -apple-system, sans-serif; font-size: 14px; font-weight: 500; fill: #2C2C2A; }
+        .ss { font-family: -apple-system, sans-serif; font-size: 12px; fill: #5F5E5A; }
+        .sm { font-family: "SF Mono", monospace; font-size: 12px; fill: #444441; }
+        .sms { font-family: "SF Mono", monospace; font-size: 11px; fill: #5F5E5A; }
+        .sn { font-family: -apple-system, sans-serif; font-size: 13px; font-weight: 500; fill: #fff; }
+        .snote { font-family: -apple-system, sans-serif; font-size: 12px; fill: #A32D2D; }
+        .sok { font-family: -apple-system, sans-serif; font-size: 12px; fill: #085041; }
+      </style>
+
+      <!-- Step 1 -->
+      <circle cx="56" cy="40" r="14" fill="#534AB7"/>
+      <text class="sn" x="56" y="40" text-anchor="middle" dominant-baseline="central">1</text>
+      <text class="st" x="80" y="36">GitHub 生成随机挑战</text>
+      <text class="ss" x="80" y="54">GitHub 随机生成 256 位随机数，比如：</text>
+      <rect x="80" y="66" width="540" height="32" rx="6" fill="#2C2C2A" stroke="none"/>
+      <text class="sm" x="92" y="86" fill="#5DCAA5">a3f7b2e9c1d4f8a6b0e5c3d7f2a9b1e4c8d0f3a6b7e2c9d1</text>
+      <text class="ss" x="80" y="116">每次 push 挑战都不同，防止重放攻击</text>
+      <line x1="56" y1="128" x2="56" y2="148" stroke="#AFA9EC" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- Step 2 -->
+      <circle cx="56" cy="162" r="14" fill="#534AB7"/>
+      <text class="sn" x="56" y="162" text-anchor="middle" dominant-baseline="central">2</text>
+      <text class="st" x="80" y="158">Mac 用私钥对挑战做签名运算</text>
+      <text class="ss" x="80" y="176">Git 读取 ~/.ssh/id_ed25519，把挑战和私钥喂进 Ed25519 算法：</text>
+      <rect x="80" y="188" width="540" height="80" rx="8" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+      <rect x="96" y="200" width="200" height="26" rx="6" fill="#CECBF6" stroke="#7F77DD" stroke-width="0.5"/>
+      <text class="sms" x="196" y="213" text-anchor="middle" dominant-baseline="central">挑战: a3f7b2e9c1d4...</text>
+      <text class="st" x="312" y="213" text-anchor="middle" dominant-baseline="central" fill="#534AB7">+</text>
+      <rect x="328" y="200" width="200" height="26" rx="6" fill="#CECBF6" stroke="#7F77DD" stroke-width="0.5"/>
+      <text class="sms" x="428" y="213" text-anchor="middle" dominant-baseline="central">私钥: id_ed25519</text>
+      <text class="st" x="544" y="213" text-anchor="middle" dominant-baseline="central" fill="#534AB7">=</text>
+      <rect x="560" y="200" width="46" height="26" rx="6" fill="#534AB7" stroke="none"/>
+      <text class="sms" x="583" y="213" text-anchor="middle" dominant-baseline="central" fill="#fff">签名</text>
+      <text class="ss" x="96" y="250">私钥参与运算，但结果不含私钥本身。无法从签名反推私钥。</text>
+      <line x1="56" y1="280" x2="56" y2="300" stroke="#AFA9EC" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- Step 3 -->
+      <circle cx="56" cy="314" r="14" fill="#534AB7"/>
+      <text class="sn" x="56" y="314" text-anchor="middle" dominant-baseline="central">3</text>
+      <text class="st" x="80" y="310">签名结果（一串乱码）</text>
+      <rect x="80" y="322" width="540" height="32" rx="6" fill="#2C2C2A" stroke="none"/>
+      <text class="sm" x="92" y="342" fill="#FAC775">9e4b7c2a1f8d3e6b0a5c9d2f7e4b1a8c3d6f0e2b5a7c9d1f4e8b3a6c0d2f5e9b</text>
+      <text class="ss" x="80" y="374">两个特点：和挑战绑定（换一个挑战签名完全不同）、和私钥绑定（只有你的私钥能算出）</text>
+      <line x1="56" y1="386" x2="56" y2="406" stroke="#AFA9EC" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- Step 4 -->
+      <circle cx="56" cy="420" r="14" fill="#534AB7"/>
+      <text class="sn" x="56" y="420" text-anchor="middle" dominant-baseline="central">4</text>
+      <text class="st" x="80" y="416">Mac 只把签名发给 GitHub（不发私钥！）</text>
+      <rect x="80" y="432" width="540" height="48" rx="8" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
+      <rect x="96" y="442" width="100" height="28" rx="6" fill="#B5D4F4" stroke="#378ADD" stroke-width="0.5"/>
+      <text class="sms" x="146" y="456" text-anchor="middle" dominant-baseline="central">Mac</text>
+      <line x1="196" y1="456" x2="260" y2="456" stroke="#378ADD" stroke-width="1.5" marker-end="url(#arr3)"/>
+      <rect x="270" y="442" width="200" height="28" rx="6" fill="#2C2C2A" stroke="none"/>
+      <text class="sms" x="370" y="456" text-anchor="middle" dominant-baseline="central" fill="#FAC775">签名: 9e4b7c2a...</text>
+      <line x1="470" y1="456" x2="534" y2="456" stroke="#378ADD" stroke-width="1.5" marker-end="url(#arr3)"/>
+      <rect x="534" y="442" width="72" height="28" rx="6" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="sms" x="570" y="456" text-anchor="middle" dominant-baseline="central">GitHub</text>
+      <text class="snote" x="80" y="498">私钥全程留在 Mac 硬盘里，一个字节都没发出去</text>
+      <line x1="56" y1="510" x2="56" y2="530" stroke="#AFA9EC" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- Step 5 -->
+      <circle cx="56" cy="544" r="14" fill="#0F6E56"/>
+      <text class="sn" x="56" y="544" text-anchor="middle" dominant-baseline="central">5</text>
+      <text class="st" x="80" y="540">GitHub 用公钥验证签名</text>
+      <text class="ss" x="80" y="558">GitHub 手里有三样东西，放一起验证：</text>
+      <rect x="80" y="570" width="540" height="80" rx="8" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <rect x="96" y="582" width="160" height="26" rx="6" fill="#9FE1CB" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="sms" x="176" y="595" text-anchor="middle" dominant-baseline="central">挑战: a3f7b2e9...</text>
+      <text class="st" x="272" y="595" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">+</text>
+      <rect x="288" y="582" width="160" height="26" rx="6" fill="#9FE1CB" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="sms" x="368" y="595" text-anchor="middle" dominant-baseline="central">签名: 9e4b7c2a...</text>
+      <text class="st" x="464" y="595" text-anchor="middle" dominant-baseline="central" fill="#0F6E56">+</text>
+      <rect x="480" y="582" width="126" height="26" rx="6" fill="#9FE1CB" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="sms" x="543" y="595" text-anchor="middle" dominant-baseline="central">公钥: id_ed25519.pub</text>
+      <text class="ss" x="96" y="632">验证通过 = 签名确实是用配对私钥生成的 = 确认你是本人</text>
+      <line x1="56" y1="664" x2="56" y2="684" stroke="#5DCAA5" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- Step 6 -->
+      <circle cx="56" cy="698" r="14" fill="#0F6E56"/>
+      <text class="sn" x="56" y="698" text-anchor="middle" dominant-baseline="central">6</text>
+      <text class="st" x="80" y="694">认证通过，开始传数据</text>
+      <text class="ss" x="80" y="712">建立加密通道，你的 commit 数据通过 SSH 隧道安全传到 GitHub</text>
+      <text class="ss" x="80" y="730">这就是终端看到的 Writing objects: 100% 那段输出</text>
+
+      <!-- 对比 -->
+      <rect x="40" y="760" width="290" height="140" rx="10" fill="#FAECE7" stroke="#F0997B" stroke-width="0.5"/>
+      <text class="st" x="185" y="782" text-anchor="middle" fill="#712B13">密码认证（传统）</text>
+      <line x1="60" y1="792" x2="310" y2="792" stroke="#F0997B" stroke-width="0.5"/>
+      <text class="ss" x="56" y="812">每次登录都发密码给服务器</text>
+      <text class="ss" x="56" y="832">密码在网络上传来传去</text>
+      <text class="ss" x="56" y="852">被截获 = 账号被盗</text>
+      <text class="snote" x="56" y="878">服务器也知道你的密码</text>
+
+      <rect x="350" y="760" width="290" height="140" rx="10" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="st" x="495" y="782" text-anchor="middle" fill="#085041">密钥认证（SSH）</text>
+      <line x1="370" y1="792" x2="620" y2="792" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="ss" x="366" y="812">私钥永远不离开你的 Mac</text>
+      <text class="ss" x="366" y="832">只发签名结果，不发私钥</text>
+      <text class="ss" x="366" y="852">签名结果被截获也没用</text>
+      <text class="sok" x="366" y="878">服务器只存公钥，不知道私钥</text>
+
+      <text class="st" x="340" y="838" text-anchor="middle" fill="#5F5E5A">VS</text>
+
+      <!-- 总结 -->
+      <rect x="40" y="920" width="600" height="90" rx="10" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+      <text class="st" x="340" y="944" text-anchor="middle">一句话总结</text>
+      <line x1="60" y1="954" x2="620" y2="954" stroke="#B4B2A9" stroke-width="0.5"/>
+      <text class="ss" x="56" y="976">私钥 = 印章，留在手里不外借</text>
+      <text class="ss" x="56" y="996">认证 = GitHub 发随机题，你用私钥签个名，GitHub 用公钥验，私钥全程不出门</text>
+    </svg>
+  </div>
+
+  <div class="warn">
+    <strong>如果有人冒充你呢？</strong>
+    <p>1. GitHub 发挑战给攻击者</p>
+    <p>2. 攻击者没有你的私钥，无法算出正确的签名</p>
+    <p>3. 随便编一个签名发过去，GitHub 用公钥验证 → 对不上 → 拒绝推送</p>
+    <p>就算攻击者偷到了你上次的签名也没用，下次挑战是新的随机数，旧签名对不上。</p>
+  </div>
+</section>
+
+<!-- ==================== 9. git push ==================== -->
+<section id="push">
+  <h2 class="step"><span class="num">9</span>git push：推送到 GitHub</h2>
+
+  <p>本地 commit 拍完快照后，需要用 <code class="inline">git push</code> 把它推送到 GitHub。</p>
+
+  <div class="cmd-block">
+    <div class="label">推送到 GitHub</div>
+    <pre>
+git push -u origin main
+    </pre>
+  </div>
+
+  <div class="cmd-explain">
+    <ul>
+      <li><code>git push</code> — 把本地 commit 推送到远程仓库</li>
+      <li><code>-u</code> — 记住"以后 push 默认推到 origin 的 main"，下次只打 <code>git push</code> 就行</li>
+      <li><code>origin</code> — 远程仓库的别名（你之前 git remote add 时设的）</li>
+      <li><code>main</code> — 你本地那条时间线（分支）的名字</li>
+    </ul>
+  </div>
+
+  <p>整句翻译：<strong>把本地 main 分支上的所有 commit，推到 origin（GitHub）的 main 分支上去。</strong></p>
+
+  <div class="note">
+    <strong>-u 只需要第一次加</strong>
+    第一次推送加 <code>-u</code> 后，Git 记住了默认目标。以后推送只需要 <code class="inline">git push</code>，不用再写完整命令。
+  </div>
+</section>
+
+<!-- ==================== 10. 终端输出 ==================== -->
+<section id="push-output">
+  <h2 class="step"><span class="num">10</span>终端输出逐行解读</h2>
+
+  <p>推送时终端会打印一堆英文，每行什么意思？用你实际的推送输出来逐行翻译：</p>
+
+  <div class="cmd-block">
+    <div class="label">实际推送输出</div>
+    <pre>
+Enumerating objects: 14, done.
+Counting objects: 100% (14/14), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (13/13), done.
+Writing objects: 100% (13/13), 27.00 KiB | 6.75 MiB/s, done.
+Total 13 (delta 7), reused 0 (delta 0), pack-reused 0
+remote: Resolving deltas: 100% (7/7), completed with 1 local object.
+To github.com:yuchengstudio/embedded-linux-lab.git
+   bc1af84..e15612d  main -> main
+branch 'main' set up to track 'origin/main'.
+    </pre>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>终端输出</th><th>中文意思</th></tr>
+      <tr><td><code>Enumerating objects: 14</code></td><td>数一下有多少个变化对象，共 14 个</td></tr>
+      <tr><td><code>Counting objects: 100%</code></td><td>数完了</td></tr>
+      <tr><td><code>Delta compression</code></td><td>用差分压缩（只传改动的行，不传整个文件）</td></tr>
+      <tr><td><code>Compressing objects: 100%</code></td><td>压缩完成</td></tr>
+      <tr><td><code>Writing objects: 100% (13/13), 27 KiB</code></td><td>把 13 个对象写入传输通道，共 27KB</td></tr>
+      <tr><td><code>Resolving deltas: 100% (7/7)</code></td><td>GitHub 收到后，把 7 个差异块拼回完整文件</td></tr>
+      <tr><td><code>bc1af84..e15612d</code></td><td>版本从旧 bc1af84 更新到新 e15612d</td></tr>
+      <tr><td><code>main -> main</code></td><td>从本地 main 推到 GitHub 的 main</td></tr>
+      <tr><td><code>branch set up to track</code></td><td>-u 生效，以后默认推到这个分支</td></tr>
+    </table>
+  </div>
+
+  <h3>Resolving deltas（还原差异）具体例子</h3>
+
+  <p>Git 传文件<strong>不是整个传</strong>，而是只传"改了哪些行"（叫 delta，差异）。</p>
+
+  <p>比如你的 HTML 第 1030 行附近，旧版和新版的差异：</p>
+
+  <div class="svg-box">
+    <div class="svg-title">Resolving deltas：GitHub 怎么拼回完整文件</div>
+    <svg viewBox="0 0 680 340" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <style>
+        .dt { font-family: -apple-system, sans-serif; font-size: 14px; font-weight: 500; fill: #2C2C2A; }
+        .ds { font-family: -apple-system, sans-serif; font-size: 12px; fill: #5F5E5A; }
+        .dm { font-family: "SF Mono", monospace; font-size: 12px; fill: #444441; }
+        .dms { font-family: "SF Mono", monospace; font-size: 11px; }
+      </style>
+
+      <!-- 旧版 -->
+      <rect x="20" y="20" width="200" height="120" rx="10" fill="#FAECE7" stroke="#F0997B" stroke-width="0.5"/>
+      <text class="dt" x="120" y="42" text-anchor="middle" fill="#712B13">旧版 bc1af84</text>
+      <line x1="40" y1="52" x2="200" y2="52" stroke="#F0997B" stroke-width="0.5"/>
+      <text class="dm" x="36" y="72">第 1029 行: ...build.log。</text>
+      <rect x="36" y="80" width="168" height="22" rx="4" fill="#F5C4B3" stroke="#F0997B" stroke-width="0.5"/>
+      <text class="dms" x="120" y="91" text-anchor="middle" dominant-baseline="central" fill="#712B13">第 1030 行: 输出全写进</text>
+      <text class="dm" x="36" y="120">第 1031 行: ...</text>
+
+      <!-- 差异块 -->
+      <rect x="250" y="20" width="180" height="120" rx="10" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+      <text class="dt" x="340" y="42" text-anchor="middle" fill="#3C3489">差异块 (delta)</text>
+      <line x1="270" y1="52" x2="410" y2="52" stroke="#AFA9EC" stroke-width="0.5"/>
+      <text class="dms" x="266" y="72" fill="#A32D2D">- 输出全写进 build.log。</text>
+      <text class="dms" x="266" y="90" fill="#085041">+ 。下面逐个拆开讲：</text>
+      <text class="dms" x="266" y="108" fill="#085041">+ &lt;details&gt; 命令拆解 7 零件</text>
+      <text class="dms" x="266" y="126" fill="#085041">+ ...（共加 134 行）</text>
+
+      <line x1="220" y1="80" x2="250" y2="80" stroke="#AFA9EC" stroke-width="1.5" marker-end="url(#arr4)"/>
+
+      <!-- 新版 -->
+      <rect x="460" y="20" width="200" height="120" rx="10" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="dt" x="560" y="42" text-anchor="middle" fill="#085041">新版 e15612d</text>
+      <line x1="480" y1="52" x2="640" y2="52" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="dm" x="476" y="72">第 1029 行: ...build.log。</text>
+      <rect x="476" y="80" width="168" height="22" rx="4" fill="#9FE1CB" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="dms" x="560" y="91" text-anchor="middle" dominant-baseline="central" fill="#085041">第 1030 行: 。下面逐个</text>
+      <text class="dm" x="476" y="120">+ 134 行新内容...</text>
+
+      <line x1="430" y1="80" x2="460" y2="80" stroke="#5DCAA5" stroke-width="1.5" marker-end="url(#arr4)"/>
+
+      <!-- 说明 -->
+      <rect x="20" y="160" width="640" height="80" rx="10" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+      <text class="ds" x="36" y="182">过程：</text>
+      <text class="ds" x="36" y="202">1. 你本地：旧版改了 134 行，Git 把变化打包成 7 个差异块</text>
+      <text class="ds" x="36" y="222">2. 传输：只传这 7 个差异块（27KB），不传整个 1500 行的文件</text>
+
+      <rect x="20" y="260" width="640" height="60" rx="10" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="dt" x="340" y="284" text-anchor="middle" fill="#085041">Resolving deltas: 100% (7/7)</text>
+      <text class="ds" x="340" y="304" text-anchor="middle">= GitHub 把 7 个差异块全部拼回完整文件，新版组装完成</text>
+    </svg>
+  </div>
+
+  <div class="tip">
+    <strong>为什么不直接传整个文件？</strong>
+    <p>旧文件 1500 行，你只改了 134 行。传整个文件 = 传 1500 行；传 delta = 只传 134 行。省了 90% 的传输量，所以只用了 27KB 就推完了。</p>
+  </div>
+</section>
+
+<!-- ==================== 11. 分支 ==================== -->
+<section id="branch">
+  <h2 class="step"><span class="num">11</span>分支：同时干多件事</h2>
+
+  <p>分支就是 Git 时间线上的<strong>一条线</strong>。每次 commit 就在这条线上加一个点。<code class="inline">main</code> 是默认的主线名字。</p>
+
+  <div class="svg-box">
+    <div class="svg-title">多分支示意图：同时干多件事互不干扰</div>
+    <svg viewBox="0 0 680 360" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <style>
+        .bt { font-family: "SF Mono", monospace; font-size: 12px; font-weight: 500; }
+        .bs { font-family: -apple-system, sans-serif; font-size: 12px; }
+        .bh { font-family: -apple-system, sans-serif; font-size: 14px; font-weight: 500; }
+      </style>
+
+      <!-- main 分支 -->
+      <rect x="20" y="40" width="80" height="28" rx="6" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="bh" x="60" y="54" text-anchor="middle" dominant-baseline="central" fill="#085041">main</text>
+      <line x1="100" y1="54" x2="130" y2="54" stroke="#5DCAA5" stroke-width="1.5" marker-end="url(#arr5)"/>
+      <rect x="135" y="42" width="70" height="24" rx="6" fill="#9FE1CB" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="bt" x="170" y="54" text-anchor="middle" dominant-baseline="central" fill="#085041">e1d6798</text>
+      <line x1="205" y1="54" x2="235" y2="54" stroke="#5DCAA5" stroke-width="1.5" marker-end="url(#arr5)"/>
+      <rect x="240" y="42" width="70" height="24" rx="6" fill="#9FE1CB" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="bt" x="275" y="54" text-anchor="middle" dominant-baseline="central" fill="#085041">e15612d</text>
+      <line x1="310" y1="54" x2="340" y2="54" stroke="#5DCAA5" stroke-width="1.5" marker-end="url(#arr5)"/>
+      <rect x="345" y="42" width="70" height="24" rx="6" fill="#9FE1CB" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text class="bt" x="380" y="54" text-anchor="middle" dominant-baseline="central" fill="#085041">b6b1926</text>
+      <text class="bs" x="425" y="54" dominant-baseline="central" fill="#085041">稳定版，随时能推 GitHub</text>
+
+      <!-- experiment 分支 -->
+      <rect x="20" y="140" width="100" height="28" rx="6" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
+      <text class="bh" x="70" y="154" text-anchor="middle" dominant-baseline="central" fill="#0C447C">experiment</text>
+      <line x1="120" y1="154" x2="150" y2="154" stroke="#85B7EB" stroke-width="1.5" marker-end="url(#arr5)"/>
+      <rect x="155" y="142" width="70" height="24" rx="6" fill="#B5D4F4" stroke="#378ADD" stroke-width="0.5"/>
+      <text class="bt" x="190" y="154" text-anchor="middle" dominant-baseline="central" fill="#0C447C">x1a2b3c</text>
+      <line x1="225" y1="154" x2="255" y2="154" stroke="#85B7EB" stroke-width="1.5" marker-end="url(#arr5)"/>
+      <rect x="260" y="142" width="70" height="24" rx="6" fill="#B5D4F4" stroke="#378ADD" stroke-width="0.5"/>
+      <text class="bt" x="295" y="154" text-anchor="middle" dominant-baseline="central" fill="#0C447C">x2c3d4e</text>
+      <text class="bs" x="345" y="154" dominant-baseline="central" fill="#0C447C">试加新内容，不影响主线</text>
+
+      <!-- 从 main 分叉 -->
+      <path d="M 170 66 Q 170 100 170 142" fill="none" stroke="#85B7EB" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr5)"/>
+      <text class="bs" x="180" y="108" fill="#0C447C">git checkout -b experiment</text>
+
+      <!-- bugfix 分支 -->
+      <rect x="20" y="240" width="80" height="28" rx="6" fill="#FAEEDA" stroke="#EF9F27" stroke-width="0.5"/>
+      <text class="bh" x="60" y="254" text-anchor="middle" dominant-baseline="central" fill="#633806">bugfix</text>
+      <line x1="100" y1="254" x2="130" y2="254" stroke="#EF9F27" stroke-width="1.5" marker-end="url(#arr5)"/>
+      <rect x="135" y="242" width="70" height="24" rx="6" fill="#FAC775" stroke="#EF9F27" stroke-width="0.5"/>
+      <text class="bt" x="170" y="254" text-anchor="middle" dominant-baseline="central" fill="#633806">f1e2d3a</text>
+      <line x1="205" y1="254" x2="235" y2="254" stroke="#EF9F27" stroke-width="1.5" marker-end="url(#arr5)"/>
+      <rect x="240" y="242" width="70" height="24" rx="6" fill="#FAC775" stroke="#EF9F27" stroke-width="0.5"/>
+      <text class="bt" x="275" y="254" text-anchor="middle" dominant-baseline="central" fill="#633806">f2a3b4c</text>
+      <text class="bs" x="325" y="254" dominant-baseline="central" fill="#633806">修 bug 专用，修完合回 main</text>
+
+      <!-- 从 main 分叉 -->
+      <path d="M 170 66 Q 130 150 170 242" fill="none" stroke="#EF9F27" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr5)"/>
+      <text class="bs" x="100" y="180" fill="#633806">git checkout -b bugfix</text>
+
+      <!-- 说明 -->
+      <rect x="20" y="300" width="640" height="48" rx="10" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+      <text class="bs" x="36" y="322" fill="#444441">三条线互不影响：experiment 上试新内容时，main 还是稳定版；bugfix 上修 bug 时，experiment 的内容也不会跑进来。</text>
+      <text class="bs" x="36" y="340" fill="#444441">想合哪条就 git merge，完全你说了算。</text>
+    </svg>
+  </div>
+
+  <div class="note">
+    <strong>不用分支会怎样？</strong>
+    <p>你只能在一个时间线上改所有东西，改错了就回不去。有了分支，可以同时干多件事，互不干扰。</p>
+  </div>
+</section>
+
+<!-- ==================== 12. 完整推送流程 ==================== -->
+<section id="full-flow">
+  <h2 class="step"><span class="num">12</span>完整推送流程：4 步实战</h2>
+
+  <p>每次改完文件，推送到 GitHub 只需要 4 步。下面用你的实际场景演示：</p>
+
+  <div class="svg-box">
+    <div class="svg-title">完整推送流程：从改文件到上 GitHub</div>
+    <svg viewBox="0 0 680 420" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <style>
+        .ft { font-family: -apple-system, sans-serif; font-size: 14px; font-weight: 500; fill: #2C2C2A; }
+        .fs { font-family: -apple-system, sans-serif; font-size: 12px; fill: #5F5E5A; }
+        .fm { font-family: "SF Mono", monospace; font-size: 12px; fill: #444441; }
+        .fn { font-family: -apple-system, sans-serif; font-size: 13px; font-weight: 500; fill: #fff; }
+      </style>
+
+      <!-- Step 1: cp -->
+      <circle cx="56" cy="40" r="14" fill="#534AB7"/>
+      <text class="fn" x="56" y="40" text-anchor="middle" dominant-baseline="central">1</text>
+      <text class="ft" x="80" y="36">cp：把改好的文件复制到仓库目录</text>
+      <text class="fs" x="80" y="54">主文件在 WorkBuddy 目录，Git 只认仓库目录里的文件</text>
+      <rect x="80" y="66" width="560" height="28" rx="6" fill="#2C2C2A" stroke="none"/>
+      <text class="fm" x="92" y="84" fill="#e4f2e6">cp ~/WorkBuddy/.../sama5d27-docker-guide.html ~/sama5/sama5d27-docker-guide/</text>
+      <line x1="56" y1="104" x2="56" y2="124" stroke="#AFA9EC" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- Step 2: add -->
+      <circle cx="56" cy="138" r="14" fill="#534AB7"/>
+      <text class="fn" x="56" y="138" text-anchor="middle" dominant-baseline="central">2</text>
+      <text class="ft" x="80" y="134">git add -A：标记所有变化</text>
+      <text class="fs" x="80" y="152">Git 扫一遍仓库目录，发现 HTML 被修改了，打个标记</text>
+      <rect x="80" y="164" width="560" height="28" rx="6" fill="#2C2C2A" stroke="none"/>
+      <text class="fm" x="92" y="182" fill="#e4f2e6">cd ~/sama5/sama5d27-docker-guide && git add -A</text>
+      <line x1="56" y1="202" x2="56" y2="222" stroke="#AFA9EC" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- Step 3: commit -->
+      <circle cx="56" cy="236" r="14" fill="#534AB7"/>
+      <text class="fn" x="56" y="236" text-anchor="middle" dominant-baseline="central">3</text>
+      <text class="ft" x="80" y="232">git commit -m "说明"：拍快照</text>
+      <text class="fs" x="80" y="250">Git 拍一张快照，生成唯一 ID，写上说明</text>
+      <rect x="80" y="262" width="560" height="28" rx="6" fill="#2C2C2A" stroke="none"/>
+      <text class="fm" x="92" y="280" fill="#e4f2e6">git commit -m "扩充 nohup 命令拆解表"</text>
+      <line x1="56" y1="300" x2="56" y2="320" stroke="#AFA9EC" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- Step 4: push -->
+      <circle cx="56" cy="334" r="14" fill="#0F6E56"/>
+      <text class="fn" x="56" y="334" text-anchor="middle" dominant-baseline="central">4</text>
+      <text class="ft" x="80" y="330">git push：推送到 GitHub</text>
+      <text class="fs" x="80" y="348">通过 SSH 隧道把 commit 传到 GitHub，终端显示推送进度</text>
+      <rect x="80" y="360" width="560" height="28" rx="6" fill="#2C2C2A" stroke="none"/>
+      <text class="fm" x="92" y="378" fill="#e4f2e6">git push</text>
+    </svg>
+  </div>
+
+  <p>嫌麻烦？可以写成一条命令：</p>
+
+  <div class="cmd-block">
+    <div class="label">一键推送（4 步合一）</div>
+    <pre>
+cp ~/WorkBuddy/2026-07-27-22-40-48/sama5d27-docker-guide.html ~/sama5/sama5d27-docker-guide/ && cd ~/sama5/sama5d27-docker-guide && git add -A && git commit -m "更新内容" && git push
+    </pre>
+  </div>
+
+  <div class="note">
+    <strong>首次推送 vs 以后推送</strong>
+    <p>第一次推送需要做 6 件事（初始化 + 关联远程 + 登录 + 推送），以后每次只需要上面 4 步就行。</p>
+  </div>
+
+  <details>
+    <summary>首次推送的完整 6 步（点击展开）</summary>
+    <div class="body">
+      <ol>
+        <li><code>git init</code> — 给文件夹开账本</li>
+        <li><code>git remote add origin git@github.com:用户名/仓库名.git</code> — 关联 GitHub 仓库</li>
+        <li><code>gh auth login -w</code> — 登录 GitHub（选 SSH 协议，上传公钥）</li>
+        <li><code>git add -A</code> — 标记所有文件</li>
+        <li><code>git commit -m "第一版"</code> — 拍第一张快照</li>
+        <li><code>git push -u origin main</code> — 推送到 GitHub</li>
+      </ol>
+      <p>这 6 步只需要做一次。以后每次改完文件，只需要 cp + add + commit + push 四步。</p>
+    </div>
+  </details>
+</section>
+
+<!-- ==================== 13. FAQ ==================== -->
+<section id="faq">
+  <h2 class="step"><span class="num">13</span>常见问题 FAQ</h2>
+
+  <details>
+    <summary>Q: push 被拒绝，提示 "Updates were rejected because the remote contains work"</summary>
+    <div class="body">
+      <p>原因是 GitHub 仓库上已有内容，而你本地没有那些内容。Git 不让你直接覆盖。</p>
+      <p>解决：先拉取再推送：</p>
+      <pre>git pull origin main --rebase
+git push -u origin main</pre>
+      <p>如果报 CONFLICT（冲突），说明本地和远程改了同一个文件，需要手动解决冲突后再 commit 和 push。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Q: push 报错 "Permission denied (publickey)"</summary>
+    <div class="body">
+      <p>原因是 GitHub 没有你的公钥，或者远程地址配成了 HTTPS 但你登录选了 SSH。</p>
+      <p>解决：</p>
+      <ol>
+        <li>检查远程地址格式：<code>git remote -v</code></li>
+        <li>如果是 HTTPS，改成 SSH：<code>git remote set-url origin git@github.com:用户名/仓库名.git</code></li>
+        <li>确认公钥已上传：<code>gh auth status</code> 或去 GitHub Settings - SSH keys 查看</li>
+      </ol>
+    </div>
+  </details>
+
+  <details>
+    <summary>Q: git add 和 git commit 有什么区别？</summary>
+    <div class="body">
+      <p><strong>git add</strong>：把文件从"工作区"搬到"暂存区"，只是打个标记说"这个文件变了"。Git 还没有正式记录。</p>
+      <p><strong>git commit</strong>：把暂存区里标记的文件正式"拍一张快照"存到本地仓库。这才是正式记录。</p>
+      <p>比喻：add = 把商品放进购物车；commit = 结账下单。你可以 add 很多次，最后一次性 commit。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Q: git push -u 里的 -u 是什么意思？</summary>
+    <div class="body">
+      <p><code>-u</code> 是 <code>--set-upstream</code> 的缩写。它的作用是记住"以后 push 默认推到 origin 的 main 分支"。</p>
+      <p>第一次推送加 <code>-u</code> 后，以后只需要打 <code>git push</code>，不用再写完整的 <code>git push origin main</code>。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Q: 什么是 SSH 隧道？</summary>
+    <div class="body">
+      <p>SSH 隧道就是你 Mac 和 GitHub 之间的一条<strong>加密管道</strong>。数据进入管道前被"锁进密码箱"变成乱码，到达 GitHub 后才"解锁"还原。沿途经过的路由器、运营商，看到的只是一堆乱码。</p>
+      <p>不加密 = 明信片，谁都能偷看；SSH 隧道 = 密码箱，只有两端能读懂。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Q: 私钥丢了怎么办？</summary>
+    <div class="body">
+      <p>私钥丢了 = 别人可能捡到 = 别人能冒充你推送代码。立即：</p>
+      <ol>
+        <li>去 GitHub Settings - SSH keys 删掉对应的公钥</li>
+        <li>本地重新生成：<code>ssh-keygen -t ed25519 -C "你的邮箱"</code></li>
+        <li>重新上传公钥：<code>gh auth login -w</code></li>
+      </ol>
+    </div>
+  </details>
+
+  <details>
+    <summary>Q: commit ID 为什么是乱码？</summary>
+    <div class="body">
+      <p>commit ID 是 Git 根据文件内容、时间、作者等信息用 SHA-1 哈希算法算出来的。内容只要有一个字不一样，ID 就完全不同。所以它是全球唯一的，不会重复。</p>
+      <p>完整 ID 是 40 位（如 <code>e15612d2e502bf8a72b437d770b84e6deb44e79a</code>），日常只看前 7 位（<code>e15612d</code>），足够区分。</p>
+    </div>
+  </details>
+</section>
+
+<footer>
+  <p>Git 从 0 到 1 全流程详解 · 基于真实 SAMA5D27 项目推送 GitHub 的实战经历整理</p>
+  <p>涵盖：三大区域 / add / commit / push / 公钥私钥 / SSH 认证 / 分支 / 终端输出解读</p>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  function copyText(text, done) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(text, done); });
+    } else { fallback(text, done); }
+  }
+  function fallback(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  document.querySelectorAll("pre").forEach(function (pre) {
+    var raw = pre.textContent.replace(/\r\n?/g, "\n");
+    var lines = raw.split("\n");
+    pre.textContent = "";
+
+    var style = window.getComputedStyle(pre);
+    var prPad = parseFloat(style.paddingRight) || 0;
+    if (prPad < 50) pre.style.paddingRight = "50px";
+
+    lines.forEach(function (line) {
+      var row = document.createElement("div");
+      row.className = "cmd-row";
+
+      var trimmed = line.replace(/^\s+|\s+$/g, "");
+      if (trimmed === "") {
+        row.classList.add("is-blank");
+        pre.appendChild(row);
+        return;
+      }
+
+      var text = document.createElement("span");
+      text.className = "cmd-text";
+      text.textContent = line;
+
+      if (/^\s*#/.test(line)) {
+        row.classList.add("is-comment");
+        row.appendChild(text);
+        pre.appendChild(row);
+        return;
+      }
+
+      var btn = document.createElement("button");
+      btn.className = "copy-btn";
+      btn.type = "button";
+      btn.textContent = "复制";
+      btn.addEventListener("click", function () {
+        var payload = line.replace(/^\s+|\s+$/g, "");
+        copyText(payload, function () {
+          btn.textContent = "已复制";
+          btn.classList.add("copied");
+          setTimeout(function () {
+            btn.textContent = "复制";
+            btn.classList.remove("copied");
+          }, 1600);
+        });
+      });
+
+      row.appendChild(text);
+      row.appendChild(btn);
+      pre.appendChild(row);
+    });
+  });
+})();
+</script>
+</body>
+</html>
