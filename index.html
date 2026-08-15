@@ -1160,6 +1160,23 @@ make -j$(nproc)</pre>
   </details>
 
   <details>
+    <summary>Buildroot 编译报 "Permission denied"（Error 126，如 compile_et）</summary>
+    <div class="body">
+      <p>原因：<code>/work</code> 是 macOS 目录的挂载点，Docker Desktop 的文件系统（gRPC-FUSE / virtiofs）在生成脚本时<strong>可能丢失可执行权限位</strong>。Buildroot 编译过程中会生成脚本再立刻执行（如 e2fsprogs 的 <code>compile_et</code>），权限位丢失就报 Error 126（文件存在但不可执行）。</p>
+      <p>快速修复（对单个文件）：</p>
+      <pre>chmod +x output/build/host-e2fsprogs-1.46.5/lib/et/compile_et
+make -j$(nproc)</pre>
+      <p>根治方案——用 <code>O=</code> 参数把构建输出搬到容器内部目录，源码和下载缓存（<code>dl/</code>）留在 /work 不受影响：</p>
+      <pre>mkdir -p /root/br-out
+make O=/root/br-out atmel_sama5d27_som1_ek_mmc_dev_defconfig
+nohup make O=/root/br-out -j$(nproc) &gt; /root/build.log 2&gt;&amp;1 &amp;
+tail -f /root/build.log</pre>
+      <p>编完记得把产物拷回挂载目录，Mac 上才能烧录：</p>
+      <pre>cp /root/br-out/images/sdcard.img /work/</pre>
+    </div>
+  </details>
+
+  <details>
     <summary>编译成功的标志是什么？</summary>
     <div class="body">
       <p>命令结束后回到提示符，且最后没有 <code>Error</code>。AT91Bootstrap 额外会打印 <code>[Succeeded] It's OK to fit into SRAM area</code>。最终以"产物文件存在且有合理大小"为准（见第 10 节验证命令）。</p>
