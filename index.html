@@ -1004,38 +1004,89 @@ mkfs.ext4 -d my-rootfs my-rootfs.ext4</pre>
   </details>
 
   <h3>步骤 11.1：构建 Buildroot（容器内）</h3>
+
+  <div class="warn">
+    <strong>⚠️ macOS 挂载目录会导致编译失败，必须用 O= 参数</strong>
+    <p>直接在 <code>/work</code> 下 <code>make</code> 会报 <code>Permission denied (Error 126)</code>。原因见下方"深入理解"。</p>
+  </div>
+
   <div class="cmd-block">
     <div class="label">容器内 · 首次构建约 1-2 小时</div>
     <pre>cd /work
 git clone https://github.com/linux4sam/buildroot-at91.git
 cd buildroot-at91
 ls configs/ | grep sama5d2
-make atmel_sama5d27_som1_ek_mmc_dev_defconfig
-make -j$(nproc)</pre>
+mkdir -p /root/br-out
+make O=/root/br-out atmel_sama5d27_som1_ek_mmc_dev_defconfig
+nohup make O=/root/br-out -j$(nproc) > /root/build.log 2>&1 &
+tail -f /root/build.log</pre>
   </div>
   <div class="cmd-explain">
     <ul>
       <li><code>ls configs/ | grep sama5d2</code> — 先列出该仓库实际提供的 SAMA5D2 系列配置，避免配置名写错。</li>
-      <li><code>make atmel_sama5d27_som1_ek_mmc_dev_defconfig</code> — 加载官方为 SAMA5D27 SOM1 EK 准备的默认配置。命名规则：<code>atmel_</code> = 老产品线前缀（Microchip 收购前），<code>_mmc</code> = SD 卡启动，<code>_dev</code> = 开发者版镜像（多带演示程序和调试工具，linux4sam 官网预编译 demo 即出自此配置）。</li>
-      <li><code>make -j$(nproc)</code> — 全自动构建：下载并交叉编译工具链、内核、引导、几百个软件包。首次耗时 1-2 小时，中途不能 Ctrl+C。</li>
+      <li><code>make atmel_sama5d27_som1_ek_mmc_dev_defconfig</code> — 加载官方为 SAMA5D27 SOM1 EK 准备的默认配置。命名规则：<code>atmel_</code> = 老产品线前缀（Microchip 收购前），<code>_mmc</code> = SD 卡启动，<code>_dev</code> = 开发者版镜像（多带演示程序和调试工具）。</li>
+      <li><code>mkdir -p /root/br-out</code> — 在容器自己的文件系统里建一个目录，专门放编译产物。<strong>不在 <code>/work</code> 里建，是解决 Permission 问题的关键。</strong></li>
+      <li><code>O=/root/br-out</code> — 告诉 Buildroot："源码在当前目录，但<strong>所有编译产物都写到 <code>/root/br-out</code></strong>。" 源码和下载缓存在 <code>/work</code>（Mac 能看到），编译产物在 <code>/root</code>（容器自己的地盘，权限不受限）。</li>
+      <li><code>nohup make ... &</code> — <strong>这条才是真正开始编译的命令</strong>，<code>&</code> 把编译放到后台跑，<code>nohup</code> 让它不被终端关闭打断，输出全写进 <code>/root/build.log</code>。</li>
+      <li><code>tail -f /root/build.log</code> — 只是"看日志"，<strong>不负责启动编译</strong>。实时显示编译进度，按 Ctrl+C 只退出查看、<strong>不会</strong>中断后台编译。想再回去看就再跑一次这条。</li>
     </ul>
   </div>
 
-  <div class="tip">
-    <strong>💡 建议用后台方式跑，防手滑</strong>
-    <pre>nohup make -j$(nproc) > build.log 2>&1 &
-tail -f build.log</pre>
-    <p>编译输出全部写进 <code>build.log</code>；<code>tail -f</code> 随时看进度，此时按 Ctrl+C 只退出查看、不影响后台编译。</p>
+  <details>
+    <summary>📖 深入理解：为什么 /work 会报 Permission denied，为什么要搬到 /root？</summary>
+    <div class="body">
+      <h3 style="margin-top:8px;">1. 先理清"谁的地盘"</h3>
+      <p>你 Mac 硬盘上有个文件夹 <code>~/sama5</code>。Docker 启动容器时，把 Mac 上 <code>~/sama5</code> <strong>映射</strong>成容器里的 <code>/work</code>。两边看到的是<strong>同一份文件</strong>——容器里改，Mac 上也变；Mac 上改，容器里也变。</p>
+      <pre>/work = ~/sama5（同一份文件的两个入口）</pre>
+
+      <h3>2. 为什么有"死规矩"</h3>
+      <p>这些文件<strong>终究还是 Mac 的文件</strong>，文件身上的属性（比如"能不能执行"这种标记）是 <strong>Mac 的文件系统说了算</strong>，容器说了不算。Docker 出于安全考虑，定了一条规则：<strong>容器不能去改 Mac 文件身上的权限属性</strong>。</p>
+      <div class="tip" style="margin:10px 0;">
+        <strong>类比</strong>
+        <p>你把家里的书借给朋友看。朋友可以翻、可以在空白处写字，但你规定：<strong>不许给书包书皮、不许改封皮颜色</strong>。书是你的，外观属性你说了算，朋友只能动内容。"可执行"这个标记，就相当于"书的封皮颜色"。朋友（容器）想把它改成绿色（可执行），你（Mac 文件系统）不让。</p>
+      </div>
+
+      <h3>3. 编译为什么会卡在这条规矩上</h3>
+      <p>Buildroot 编译时会<strong>当场写一个脚本出来，写完马上就要运行它</strong>（如 e2fsprogs 的 <code>compile_et</code>）。这个脚本写在 <code>output/</code> 里，而 <code>output/</code> 在 <code>/work</code> 下面 → 也就是 Mac 的文件上：</p>
+      <pre>Buildroot: "我写好脚本了，现在执行它"
+文件系统:  "这个文件没有可执行标记"
+Buildroot: "那我给它加上"
+文件系统:  "这是 Mac 的文件，你不许改标记"
+Buildroot: "……"  → Permission denied (Error 126)</pre>
+      <p><code>chmod +x</code> 也改不了——因为 <code>chmod</code> 本身就是在"改 Mac 文件的权限属性"，同样被拒绝。</p>
+
+      <h3>4. 为什么搬到 /root 就解决了</h3>
+      <p><code>/root</code> 是<strong>容器自己的地盘</strong>，不在 Mac 硬盘上，是容器自己虚拟出来的文件系统。在这块地盘上容器是老大：文件想怎么标记就怎么标记，生成的脚本可以立刻打上"可执行"标记，没人拦着。</p>
+      <pre>/work  = Mac 的地盘，借来的，规矩多，不能改文件属性  ✗ 编译会卡
+/root  = 容器自己的地盘，自己做主，想怎么改怎么改    ✓ 编译顺畅</pre>
+      <p>所以用 <code>O=/root/br-out</code> 把编译产物放到容器内部，问题就彻底消失了。源码（只读不执行，不受影响）留在 <code>/work</code>，各放各的地方互不打架。</p>
+    </div>
+  </details>
+
+  <div class="note">
+    <strong>各命令的分工一览</strong>
+    <div class="table-wrap" style="margin-top:8px;">
+      <table>
+        <tr><th>命令</th><th>做了什么</th><th>编译开始了吗</th></tr>
+        <tr><td><code>make ...defconfig</code></td><td>加载配置（几秒完成）</td><td>否，只是配置</td></tr>
+        <tr><td><code>nohup make ... &</code></td><td><strong>这条才真正开始编译</strong>，输出写到日志文件</td><td>✓ 是</td></tr>
+        <tr><td><code>tail -f /root/build.log</code></td><td>打开日志实时显示进度</td><td>不影响编译</td></tr>
+      </table>
+    </div>
+    <p style="margin-top:8px;">执行 <code>nohup ... &</code> 后终端会回一行 <code>[1] 12345</code>（数字是进程号），就说明后台编译已启动。此时跑 <code>tail -f</code> 就能看到不断滚动的日志。编完会出现 <code>Done</code> 字样并停下来。</p>
   </div>
 
-  <h3>步骤 11.2：确认镜像产物</h3>
+  <h3>步骤 11.2：确认镜像产物并拷回 /work</h3>
+  <p>编译产物在容器内部的 <code>/root/br-out/images/</code>，Mac 默认看不到。先确认产物存在，再拷到 <code>/work</code>（Mac 可见）：</p>
   <div class="cmd-block">
     <div class="label">容器内</div>
-    <pre>ls -lh output/images/sdcard.img</pre>
+    <pre>ls -lh /root/br-out/images/sdcard.img
+cp /root/br-out/images/sdcard.img /work/</pre>
   </div>
   <div class="cmd-explain">
     <ul>
-      <li><code>sdcard.img</code> — 完整 SD 卡镜像，内含分区表 + 引导 + 内核 + rootfs，通常几百 MB。它在 <code>/work</code> 挂载目录下，Mac 端路径即 <code>~/sama5/buildroot-at91/output/images/sdcard.img</code>。</li>
+      <li><code>ls -lh /root/br-out/images/sdcard.img</code> — 确认完整 SD 卡镜像已生成，通常几百 MB。内含分区表 + 引导 + 内核 + rootfs。</li>
+      <li><code>cp ... /work/</code> — 把镜像从容器内部拷到挂载目录，Mac 端路径即 <code>~/sama5/sdcard.img</code>，随后可直接 <code>dd</code> 烧录。</li>
     </ul>
   </div>
 
@@ -1045,7 +1096,7 @@ tail -f build.log</pre>
     <div class="label">Mac 终端 · 烧录前先确认设备名</div>
     <pre>diskutil list
 diskutil unmountDisk /dev/diskN
-sudo dd if=~/sama5/buildroot-at91/output/images/sdcard.img of=/dev/rdiskN bs=1m
+sudo dd if=~/sama5/sdcard.img of=/dev/rdiskN bs=1m
 diskutil eject /dev/diskN</pre>
   </div>
   <div class="cmd-explain">
