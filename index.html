@@ -1027,7 +1027,140 @@ tail -f /root/build.log</pre>
       <li><code>make atmel_sama5d27_som1_ek_mmc_dev_defconfig</code> — 加载官方为 SAMA5D27 SOM1 EK 准备的默认配置。命名规则：<code>atmel_</code> = 老产品线前缀（Microchip 收购前），<code>_mmc</code> = SD 卡启动，<code>_dev</code> = 开发者版镜像（多带演示程序和调试工具）。</li>
       <li><code>mkdir -p /root/br-out</code> — 在容器自己的文件系统里建一个目录，专门放编译产物。<strong>不在 <code>/work</code> 里建，是解决 Permission 问题的关键。</strong></li>
       <li><code>O=/root/br-out</code> — 告诉 Buildroot："源码在当前目录，但<strong>所有编译产物都写到 <code>/root/br-out</code></strong>。" 源码和下载缓存在 <code>/work</code>（Mac 能看到），编译产物在 <code>/root</code>（容器自己的地盘，权限不受限）。</li>
-      <li><code>nohup make ... &</code> — <strong>这条才是真正开始编译的命令</strong>，<code>&</code> 把编译放到后台跑，<code>nohup</code> 让它不被终端关闭打断，输出全写进 <code>/root/build.log</code>。</li>
+      <li><code>nohup make ... &</code> — <strong>这条才是真正开始编译的命令</strong>。下面逐个拆开讲：</li>
+    </ul>
+    <details style="margin-top:12px;">
+      <summary style="cursor:pointer; font-size:15px; color:#2d6a4f; font-weight:600;">📖 命令拆解：7 个零件，一个一个看（点开展开）</summary>
+    <div class="cmd-explain" style="margin-top:12px; border-left:3px solid #4a9d6a; padding-left:16px;">
+      <h4 style="margin:0 0 8px; color:#2d6a4f;">完整命令</h4>
+      <p style="margin:0 0 10px; color:#555;">完整命令：<code style="background:#e8f5e9; padding:2px 6px; border-radius:4px;">nohup make O=/root/br-out -j$(nproc) &gt; /root/build.log 2&gt;&amp;1 &amp;</code></p>
+      <div class="table-wrap" style="margin-top:8px;">
+        <table style="font-size:13px;">
+          <tr><th style="width:22%;">零件</th><th style="width:38%;">是什么</th><th>在这里为什么需要它</th></tr>
+          <tr>
+            <td><code>nohup</code></td>
+            <td>No Hang UP 的缩写，"别挂断"</td>
+            <td>如果你不小心关了终端窗口、或者 SSH 断了，进程默认会被杀掉。<code>nohup</code> 给进程套了件"防弹衣"，<strong>终端关了它也不死</strong>，继续在后台编译。</td>
+          </tr>
+          <tr>
+            <td><code>make</code></td>
+            <td>构建工具，读 Makefile 里写的规则来编译</td>
+            <td>Buildroot 就是用 Makefile 组织的，<code>make</code> 是启动编译的总开关。</td>
+          </tr>
+          <tr>
+            <td><code>O=/root/br-out</code></td>
+            <td>Output 目录参数</td>
+            <td>告诉 Buildroot：<strong>所有编译产物写到 <code>/root/br-out</code></strong>（容器自己的地盘），而不是当前目录的 <code>output/</code>。这是绕开 Permission denied 的关键——详见上方"深入理解"。</td>
+          </tr>
+          <tr>
+            <td><code>-j$(nproc)</code></td>
+            <td><code>-j</code> = 并行编译，<code>$(nproc)</code> = 自动获取 CPU 核数</td>
+            <td>不给 <code>-j</code> 就是单核串行编译，慢得要命（可能 4-5 小时）。<code>$(nproc)</code> 会自动数你的容器有多少个 CPU 核，比如 8 核就等价于 <code>-j8</code>，同时跑 8 个编译任务，<strong>时间缩短到 1-2 小时</strong>。</td>
+          </tr>
+          <tr>
+            <td><code>&gt; /root/build.log</code></td>
+            <td>标准输出重定向，<code>&gt;</code> = "写到文件"</td>
+            <td>把编译时吐出来的文字<strong>改道写进文件</strong>，而不是喷到屏幕上。详细原理见下方「大白话讲重定向」。</td>
+          </tr>
+          <tr>
+            <td><code>2&gt;&amp;1</code></td>
+            <td>标准错误也并进来，<code>2</code> = 错误流，<code>&amp;1</code> = 跟标准输出走同一条路</td>
+            <td>Linux 有两个输出通道：①正常信息（stdout，编号 1）②报错信息（stderr，编号 2）。<code>&gt;</code> 只接 ①，错误信息还是会喷到屏幕。<code>2&gt;&amp;1</code> 的意思是"<strong>把 ② 也塞进 ① 那条管子里</strong>"，这样正常和错误信息<strong>全都进日志文件</strong>，一个都不漏。</td>
+          </tr>
+          <tr>
+            <td><code>&amp;</code>（行末最后那个）</td>
+            <td>后台运行符</td>
+            <td>没有这个 <code>&amp;</code>，终端会卡住等编译完才能输入下一条命令。加了 <code>&amp;</code>，编译<strong>立刻丢到后台跑</strong>，终端马上还给你，你可以接着输入 <code>tail -f</code> 看进度。</td>
+          </tr>
+        </table>
+      </div>
+      <div class="tip" style="margin-top:12px;">
+        <strong>整条命令翻译成人话：</strong>
+        <p style="margin:6px 0 0;">"<strong>用 <code>nohup</code> 保护着，启动 <code>make</code> 编译，产物放到 <code>/root/br-out</code>，用全部 CPU 核并行跑（<code>-j$(nproc)</code>），正常输出和错误信息都写进 <code>/root/build.log</code>（<code>&gt; ... 2&gt;&amp;1</code>），然后把这事扔到后台（<code>&amp;</code>），我终端还要干别的。</strong>"</p>
+      </div>
+      <div class="note" style="margin-top:12px;">
+        <strong>敲完之后会看到什么？</strong>
+        <p style="margin:6px 0 0;">终端立刻回一行类似 <code>[1] 12345</code>。<code>[1]</code> 是后台任务编号，<code>12345</code> 是进程号（PID）。看到这行就说明编译已经成功在后台启动了——然后紧接着跑 <code>tail -f /root/build.log</code> 去看实时进度即可。</p>
+      </div>
+      <h4 style="margin:16px 0 8px; color:#2d6a4f;">大白话讲重定向：为什么需要 <code>&gt;</code>？</h4>
+
+      <h5 style="margin:12px 0 6px; color:#2d6a4f;">先搞懂一件事：程序的"输出"默认去哪？</h5>
+      <p style="margin:0 0 10px;">你在终端里敲一个命令，比如 <code>echo hello</code>，屏幕上就打印出 <code>hello</code>。这不是魔法——<strong>每个程序天生有一根"管子"，一头连着自己，另一头默认连着屏幕</strong>。程序吐出的所有文字，顺着这根管子流到屏幕上，你就看到了。</p>
+      <div style="background:#e8f5e9; border-radius:8px; padding:16px; margin:10px 0; font-size:13px; line-height:1.8;">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span style="background:#24402f; color:#7fdb9a; padding:6px 12px; border-radius:6px; font-family:monospace;">程序 (make)</span>
+          <span style="color:#2d6a4f; font-size:20px;">──吐字──▶</span>
+          <span style="background:#fff; border:2px solid #4a9d6a; padding:6px 12px; border-radius:6px;"> 屏幕（终端窗口）</span>
+        </div>
+        <p style="margin:8px 0 0; color:#666; font-size:12px;">↑ 这就是"默认行为"：管子的出口接在屏幕上，字全部喷到你眼前。</p>
+      </div>
+
+      <h5 style="margin:12px 0 6px; color:#2d6a4f;">问题是：编译会吐几万行字</h5>
+      <p style="margin:0 0 10px;">Buildroot 编译不是吐一两行，是<strong>几万行</strong>。每一行就是"我在编译这个文件""我在链接那个库""我在下载这个包"……全部顺着管子流到屏幕上，你终端就像下面这样疯狂滚动：</p>
+      <pre style="background:#1a1a2e; color:#7fdb9a; padding:12px; border-radius:8px; font-size:11px; line-height:1.5; overflow-x:auto;">$ make -j$(nproc)
+  CC      fs/exec.o
+  CC      fs/pipe.o
+  CC      fs/namei.o
+  CC      fs/fcntl.o
+  CC      fs/mbcache.o
+  LD      fs/built-in.o
+  CC      kernel/sched/core.o
+  CC      kernel/sched/fair.o
+  CC      kernel/sched/rt.o
+  ...（还有几万行，刷到你根本看不清，也找不到重点）
+  ...（而且终端被占住了，你没法输入别的命令）
+$</pre>
+      <p style="margin:0 0 10px; color:#666; font-size:12px;">↑ 不加 <code>&gt;</code> 时，屏幕长这样：字疯狂滚动，终端卡死等编译完。</p>
+
+      <h5 style="margin:12px 0 6px; color:#2d6a4f;"><code>&gt;</code> 做了什么？——把管子的出口从"屏幕"拧到"文件"</h5>
+      <p style="margin:0 0 10px;"><code>&gt;</code> 这个符号，就是一个"<strong>管道扳手</strong>"。它把程序那根管子的出口，从"屏幕"<strong>拧下来</strong>，<strong>接到一个文件上</strong>。程序还是照常吐几万行字，但这些字全部流进了文件，屏幕上一滴都不漏出来。</p>
+      <div style="background:#e8f5e9; border-radius:8px; padding:16px; margin:10px 0; font-size:13px; line-height:1.8;">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span style="background:#24402f; color:#7fdb9a; padding:6px 12px; border-radius:6px; font-family:monospace;">程序 (make)</span>
+          <span style="color:#2d6a4f; font-size:20px;">──吐字──▶</span>
+          <span style="background:#fff; border:2px solid #4a9d6a; padding:6px 12px; border-radius:6px;"> build.log 文件 📄</span>
+        </div>
+        <p style="margin:8px 0 0; color:#666; font-size:12px;">↑ 加了 <code>&gt;</code> 后：管子出口接到了文件，屏幕上什么都不会显示。</p>
+      </div>
+      <p style="margin:0 0 10px;">加 <code>&gt;</code> 后，屏幕长这样：</p>
+      <pre style="background:#1a1a2e; color:#7fdb9a; padding:12px; border-radius:8px; font-size:11px; line-height:1.5;">$ nohup make ... > /root/build.log 2>&1 &
+[1] 12345
+$    ← 就这一行，干干净净。几万行字全进了 build.log，屏幕上看不到。
+     你可以接着输入别的命令，终端没有被占住。</pre>
+      <p style="margin:0 0 10px; color:#666; font-size:12px;">↑ 加了 <code>&gt;</code> 时，屏幕长这样：干净，终端马上还给你。</p>
+
+      <h5 style="margin:12px 0 6px; color:#2d6a4f;">那我想看编译进度怎么办？</h5>
+      <p style="margin:0;">字都进了文件，但你可以用 <code>tail -f /root/build.log</code> 去"<strong>翻看</strong>"这个文件——它会实时显示文件里新写进来的行，效果和直接喷到屏幕一样，但<strong>你可以随时 Ctrl+C 退出查看，不影响编译</strong>。不想看了就退出，想看了再 <code>tail -f</code> 一次，编译一直在后台跑，不受影响。</p>
+
+      <h4 style="margin:20px 0 8px; color:#2d6a4f;">再补充：重定向符号 <code>&gt;</code> 和 <code>2&gt;&amp;1</code> 的技术原理</h4>
+      <p style="margin:0 0 8px;">Linux 每个程序默认有<strong>三条管子</strong>连着终端：</p>
+      <div class="table-wrap" style="margin-top:4px;">
+        <table style="font-size:13px;">
+          <tr><th style="width:18%;">编号</th><th style="width:20%;">名字</th><th>默认去哪</th></tr>
+          <tr><td><code>0</code></td><td>stdin（标准输入）</td><td>键盘打字 → 程序</td></tr>
+          <tr><td><code>1</code></td><td>stdout（标准输出）</td><td>程序 → 屏幕（正常信息）</td></tr>
+          <tr><td><code>2</code></td><td>stderr（标准错误）</td><td>程序 → 屏幕（报错信息）</td></tr>
+        </table>
+      </div>
+      <p style="margin:10px 0 0;">命令里的重定向做了两步：</p>
+      <ul style="margin:4px 0 0;">
+        <li><code>&gt; /root/build.log</code> — 把<strong>管子 1</strong>（正常输出）的出口从"屏幕"改到"文件"。</li>
+        <li><code>2&gt;&amp;1</code> — 把<strong>管子 2</strong>（错误输出）的出口接到<strong>管子 1</strong>现在去的地方（也就是文件）。</li>
+      </ul>
+      <div class="tip" style="margin-top:12px;">
+        <strong>你可能想问：为什么 <code>&gt;</code> 前面没有写 <code>1</code>？</strong>
+        <p style="margin:8px 0 0;">因为 <code>&gt;</code> 就是 <code>1&gt;</code> 的<strong>简写</strong>。规则很简单：</p>
+        <ul style="margin:4px 0 0;">
+          <li><code>1&gt; 文件</code> — 重定向 1 号管子（正常输出），写完整版</li>
+          <li><code>&gt; 文件</code> — 同上，省略了 <code>1</code>，<strong>因为 1 是默认值，不写就代表 1</strong></li>
+          <li><code>2&gt; 文件</code> — 重定向 2 号管子（错误输出），<strong>必须写 <code>2</code></strong>，因为 2 不是默认值</li>
+        </ul>
+        <p style="margin:8px 0 0;">所以 <code>&gt; /root/build.log</code> 和 <code>1&gt; /root/build.log</code> 完全等价，只是大家嫌麻烦，把 <code>1</code> 省了。但 <code>2&gt;&amp;1</code> 里的 <code>2</code> 不能省——省了就变成 <code>&gt;&amp;1</code>，意思就完全变了。</p>
+      </div>
+      <p style="margin:10px 0 0;">结果：正常信息和错误信息<strong>全部流进同一个文件</strong>，屏幕上干干净净，但你想查什么都不会丢。</p>
+    </div>
+    </details>
+    <ul style="margin-top:12px;">
       <li><code>tail -f /root/build.log</code> — 只是"看日志"，<strong>不负责启动编译</strong>。实时显示编译进度，按 Ctrl+C 只退出查看、<strong>不会</strong>中断后台编译。想再回去看就再跑一次这条。</li>
     </ul>
   </div>
