@@ -1223,6 +1223,49 @@ cp /root/br-out/images/sdcard.img /work/</pre>
     </ul>
   </div>
 
+  <details>
+    <summary>📖 深入理解：sdcard.img 里的 MBR（主引导记录）是什么？（点击展开）</summary>
+    <div class="body">
+      <p>编译日志最后一步会显示 <code>writing MBR</code>。MBR（Master Boot Record，主引导记录）是 SD 卡的<strong>第一个扇区</strong>，也就是整张卡最开头的 512 个字节。</p>
+
+      <p><strong>用一本书来比喻：</strong>SD 卡就像一本厚书，MBR 就是这本书的<strong>目录页</strong>。目录页告诉你这本书分了几个章节（分区）、每个章节从第几页开始（分区起始位置）、每个章节有多长（分区大小）。板子上电后，Boot ROM 做的第一件事就是翻到"目录页"（MBR），看看这张卡是怎么分的、启动分区在哪，然后才知道去哪里找 boot.bin。</p>
+
+      <p><strong>MBR 里装了什么？（总共 512 字节，分三部分）</strong></p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;margin:8px 0;">
+        <tr style="border-bottom:1px solid #d4e9d4;">
+          <th style="padding:6px 12px;text-align:left;color:#1b4332;">部分</th>
+          <th style="padding:6px 12px;text-align:left;color:#1b4332;">大小</th>
+          <th style="padding:6px 12px;text-align:left;color:#1b4332;">作用</th>
+        </tr>
+        <tr style="border-bottom:1px solid #d4e9d4;">
+          <td style="padding:6px 12px;">启动代码</td>
+          <td style="padding:6px 12px;">446 字节</td>
+          <td style="padding:6px 12px;">一小段程序，告诉硬件"去哪个分区找引导程序"</td>
+        </tr>
+        <tr style="border-bottom:1px solid #d4e9d4;">
+          <td style="padding:6px 12px;">分区表</td>
+          <td style="padding:6px 12px;">64 字节</td>
+          <td style="padding:6px 12px;">记录这张卡分了几个区、每个区从哪开始、多大</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;">魔数</td>
+          <td style="padding:6px 12px;">2 字节</td>
+          <td style="padding:6px 12px;">固定值 <code>0x55AA</code>，相当于盖个章，表示"这是一张有效的引导卡"</td>
+        </tr>
+      </table>
+
+      <p><strong>你的 sdcard.img 为什么需要写 MBR？</strong></p>
+      <p>Buildroot 生成 <code>sdcard.img</code> 时，把两个分区装进了同一个镜像文件：</p>
+      <pre style="background:#1e1e1e;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">sdcard.img（137MB）
+├── MBR（512 字节）          ← 目录页：告诉你下面有两个分区
+├── 分区 1：boot.vfat（16M）   ← 启动分区：zImage + dtb + boot.bin + u-boot.bin
+└── 分区 2：rootfs.ext4（120M）← 根文件系统分区：Linux 运行需要的所有文件</pre>
+      <p><code>writing MBR</code> 就是把那张"目录页"写到镜像最开头。如果不写 MBR，板子的 Boot ROM 插上 SD 卡后翻第一页发现是空的，不知道分区在哪，就直接报错启动不了。</p>
+
+      <p><strong>一句话总结：</strong>MBR 就是 SD 卡开头的 512 字节"目录页"，告诉板子这张卡怎么分的、启动分区在哪。Buildroot 最后一步 <code>writing MBR</code> 就是把这个目录页写好，让 SD 卡能被板子识别和启动。</p>
+    </div>
+  </details>
+
   <h3>步骤 11.3：Mac 上烧录 SD 卡</h3>
   <p>以下命令在 <strong>Mac 终端</strong>执行（不进容器）：</p>
   <div class="cmd-block">
