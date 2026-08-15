@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAMA5D27 嵌入式 Linux 开发指南 — Mac + Docker 从零开始</title>
+<style>
+  :root {
+    --glass: rgba(255, 255, 255, 0.55);
+    --glass-strong: rgba(255, 255, 255, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.65);
+    --text: #2c4633;
+    --text-muted: #5f7a66;
+    --green: #1f7a4d;
+    --teal: #0e8a6d;
+    --cyan: #1f7a4d;
+    --violet: #4a8a5c;
+    --amber: #b07818;
+    --red: #c05a50;
+    --code-bg: #24402f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: #cfe8d0;
+    color: var(--text);
+    line-height: 1.75;
+    font-size: 15px;
+    min-height: 100vh;
+  }
+
+  /* ─── 背景光斑 ─── */
+  .bg-orbs {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(255, 255, 255, 0.55), transparent 60%),
+      radial-gradient(ellipse 60% 45% at 90% 15%, rgba(174, 213, 170, 0.45), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 50% 110%, rgba(190, 227, 190, 0.5), transparent 60%),
+      linear-gradient(160deg, #d6eed8 0%, #c6e3c9 50%, #bcdcbc 100%);
+  }
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.4;
+  }
+  .orb-1 { width: 480px; height: 480px; background: #eaf6ea; top: -120px; left: -100px; }
+  .orb-2 { width: 380px; height: 380px; background: #a8d4a8; top: 30%; right: -140px; opacity: 0.28; }
+  .orb-3 { width: 420px; height: 420px; background: #cde8cd; bottom: -160px; left: 25%; opacity: 0.3; }
+  /* 细网格 */
+  .bg-grid {
+    position: fixed; inset: 0; z-index: -1;
+    background-image:
+      linear-gradient(rgba(31, 122, 77, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(31, 122, 77, 0.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 80%);
+    -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 80%);
+  }
+
+  .wrap { max-width: 880px; margin: 0 auto; padding: 48px 24px 90px; }
+
+  /* ─── 玻璃卡片基础 ─── */
+  .glass {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 18px;
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    box-shadow: 0 8px 28px rgba(90, 130, 95, 0.18);
+  }
+
+  header.hero {
+    padding: 42px 36px;
+    margin-bottom: 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  header.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, rgba(255,255,255,0.35), transparent 40%, rgba(174, 213, 170, 0.25));
+    pointer-events: none;
+  }
+  header.hero h1 {
+    font-size: 28px; font-weight: 700; margin-bottom: 10px;
+    background: linear-gradient(90deg, #1c5c38, #2e8b57);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    position: relative;
+  }
+  header.hero p.sub { color: var(--text-muted); font-size: 14px; position: relative; }
+  header.hero .chips { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; position: relative; }
+  .chip {
+    font-size: 12px; padding: 3px 12px; border-radius: 999px;
+    border: 1px solid rgba(31, 122, 77, 0.3); color: var(--green);
+    background: rgba(255, 255, 255, 0.6);
+    font-family: "SF Mono", Menlo, monospace;
+  }
+
+  nav.toc { padding: 22px 26px; margin-bottom: 48px; }
+  nav.toc h2 {
+    font-size: 14px; font-weight: 600; margin-bottom: 12px;
+    color: var(--green); letter-spacing: 2px; text-transform: uppercase;
+  }
+  nav.toc ol { padding-left: 20px; column-count: 2; column-gap: 36px; }
+  nav.toc li { margin: 5px 0; break-inside: avoid; }
+  nav.toc a { color: var(--text); text-decoration: none; font-size: 14px; transition: color .15s; }
+  nav.toc a:hover { color: var(--green); }
+  nav.toc a .sec-no { color: #4a8a5c; font-family: "SF Mono", Menlo, monospace; font-size: 12px; margin-right: 6px; }
+
+  section { margin-bottom: 56px; }
+  h2.step {
+    font-size: 21px; font-weight: 700;
+    margin-bottom: 22px; display: flex; align-items: center; gap: 14px;
+  }
+  h2.step .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, rgba(46, 139, 87, 0.18), rgba(14, 138, 109, 0.18));
+    border: 1px solid rgba(31, 122, 77, 0.4);
+    color: var(--green); font-size: 15px; font-weight: 700;
+    font-family: "SF Mono", Menlo, monospace;
+    box-shadow: 0 0 14px rgba(46, 139, 87, 0.2);
+    flex-shrink: 0;
+  }
+  h3 { font-size: 16px; font-weight: 600; margin: 26px 0 12px; color: #274d33; }
+
+  p { margin-bottom: 12px; }
+  ul, ol { padding-left: 24px; margin-bottom: 12px; }
+  li { margin: 5px 0; }
+  strong { color: #1c4a2e; }
+
+  /* ─── 命令块 ─── */
+  .cmd-block {
+    margin: 16px 0 8px; border-radius: 14px; overflow: hidden;
+    border: 1px solid rgba(31, 122, 77, 0.3);
+    box-shadow: 0 6px 20px rgba(90, 130, 95, 0.2);
+  }
+  .cmd-block .label {
+    font-size: 12px; padding: 8px 16px;
+    background: rgba(199, 231, 203, 0.85);
+    color: var(--green); font-weight: 600;
+    border-bottom: 1px solid rgba(31, 122, 77, 0.2);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .cmd-block .label::before { content: "❯"; color: #0e8a6d; font-family: Menlo, monospace; }
+  .cmd-block pre { border-radius: 0; margin: 0; border: none; }
+
+  pre {
+    background: var(--code-bg);
+    color: #e4f2e6;
+    padding: 13px 16px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.65;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    border-radius: 12px;
+    border: 1px solid rgba(31, 61, 40, 0.5);
+    position: relative;
+  }
+  pre .comment { color: #9ec3a6; font-style: italic; }
+
+  /* ─── 每行复制：行布局 ─── */
+  pre .cmd-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 1px 0;
+    min-height: 1.65em;
+  }
+  pre .cmd-row .cmd-text {
+    flex: 1;
+    white-space: pre;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  pre .cmd-row.is-comment .cmd-text {
+    color: #9ec3a6;
+    font-style: italic;
+    opacity: 0.85;
+  }
+  pre .cmd-row.is-blank { min-height: 0.7em; }
+  .copy-btn {
+    flex-shrink: 0;
+    padding: 2px 10px;
+    font-size: 11.5px;
+    font-family: -apple-system, "PingFang SC", sans-serif;
+    color: #d8ecd9;
+    background: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .15s, background .15s, color .15s;
+    -webkit-user-select: none; user-select: none;
+    line-height: 1.5;
+  }
+  pre .cmd-row:hover .copy-btn,
+  .copy-btn:focus-visible,
+  .copy-btn.copied { opacity: 1; }
+  .copy-btn:hover { background: rgba(255, 255, 255, 0.22); }
+  .copy-btn.copied { color: #a8e6b8; border-color: rgba(110, 200, 140, 0.5); background: rgba(46, 139, 87, 0.35); opacity: 1; }
+
+  .cmd-explain {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-left: 3px solid #2e8b57;
+    border-radius: 0 14px 14px 0;
+    backdrop-filter: blur(14px);
+    padding: 14px 18px;
+    margin-bottom: 22px;
+    font-size: 14px;
+  }
+  .cmd-explain ul { padding-left: 18px; margin: 6px 0 0; }
+  .cmd-explain li { margin: 4px 0; }
+  .cmd-explain code { background: rgba(46, 139, 87, 0.14); color: #1c6240; padding: 1px 6px; border-radius: 5px; font-size: 12.5px; font-family: "SF Mono", Menlo, monospace; }
+
+  code.inline {
+    background: rgba(255, 255, 255, 0.65);
+    color: #1c6240;
+    padding: 1px 7px;
+    border-radius: 5px;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    border: 1px solid rgba(31, 122, 77, 0.22);
+  }
+
+  /* ─── 提示框 ─── */
+  .note, .warn, .tip {
+    border-radius: 14px;
+    padding: 15px 19px;
+    margin: 16px 0;
+    font-size: 14px;
+    backdrop-filter: blur(14px);
+    border: 1px solid;
+  }
+  .note { background: rgba(46, 139, 87, 0.10); border-color: rgba(46, 139, 87, 0.4); }
+  .warn { background: rgba(192, 90, 80, 0.08); border-color: rgba(192, 90, 80, 0.38); }
+  .tip  { background: rgba(176, 120, 24, 0.08); border-color: rgba(176, 120, 24, 0.38); }
+  .note strong { display: block; margin-bottom: 5px; color: #1f7a4d; }
+  .warn strong { display: block; margin-bottom: 5px; color: #b04a42; }
+  .tip  strong { display: block; margin-bottom: 5px; color: #9c6c12; }
+  .note pre, .warn pre, .tip pre { margin: 8px 0; }
+
+  /* ─── 表格 ─── */
+  .table-wrap { overflow-x: auto; border-radius: 14px; border: 1px solid rgba(255,255,255,0.7); margin: 16px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; backdrop-filter: blur(14px); }
+  th, td { padding: 10px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid rgba(31, 122, 77, 0.12); }
+  tr:last-child td { border-bottom: none; }
+  th { background: rgba(199, 231, 203, 0.6); font-weight: 600; color: #1c5c38; white-space: nowrap; }
+  td { background: rgba(255, 255, 255, 0.35); color: #334f39; }
+  td code, th code {
+    font-family: "SF Mono", Menlo, monospace; font-size: 12px;
+    background: rgba(46, 139, 87, 0.12); color: #1c6240;
+    padding: 1px 5px; border-radius: 4px;
+  }
+
+  /* ─── 启动链流程 ─── */
+  .flow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 18px 0; }
+  .flow .node {
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(31, 122, 77, 0.35);
+    border-radius: 10px; padding: 7px 15px;
+    font-size: 13px; font-weight: 600; color: #24523a;
+    white-space: nowrap; backdrop-filter: blur(8px);
+    box-shadow: 0 2px 10px rgba(90, 130, 95, 0.15);
+  }
+  .flow .arrow { color: #2e8b57; font-size: 15px; }
+
+  /* ─── FAQ 折叠 ─── */
+  details {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 14px;
+    padding: 0;
+    margin: 12px 0;
+    backdrop-filter: blur(14px);
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  details:hover { border-color: rgba(46, 139, 87, 0.4); }
+  details[open] { border-color: rgba(46, 139, 87, 0.5); }
+  details summary {
+    cursor: pointer; font-weight: 600; font-size: 14px;
+    padding: 14px 18px; list-style: none; position: relative;
+    color: #2c4633; user-select: none;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before {
+    content: "▸"; color: var(--green); margin-right: 10px;
+    display: inline-block; transition: transform .2s;
+  }
+  details[open] summary::before { transform: rotate(90deg); }
+  details .body { padding: 2px 18px 16px 32px; font-size: 14px; }
+
+  footer {
+    margin-top: 70px; padding-top: 24px;
+    border-top: 1px solid rgba(31, 122, 77, 0.2);
+    color: var(--text-muted); font-size: 13px; text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    nav.toc ol { column-count: 1; }
+    .wrap { padding: 24px 14px 60px; }
+    header.hero { padding: 28px 22px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+<div class="bg-grid"></div>
+
+<div class="wrap">
+
+<header class="hero glass">
+  <h1>SAMA5D27 嵌入式 Linux 开发指南</h1>
+  <p class="sub">Mac + Docker 从零开始 · 全手动命令操作 · 每条命令附说明</p>
+  <p class="sub">适用开发板：ATSAMA5D27-SOM1-EK1 / SAMA5D2 Xplained Ultra</p>
+  <div class="chips">
+    <span class="chip">Docker</span>
+    <span class="chip">Ubuntu 22.04</span>
+    <span class="chip">AT91Bootstrap 4.0.x</span>
+    <span class="chip">U-Boot</span>
+    <span class="chip">Linux 6.1-mchp</span>
+  </div>
+</header>
+
+<nav class="toc glass">
+  <h2>目录 · Contents</h2>
+  <ol>
+    <li><a href="#concept"><span class="sec-no">01</span>核心概念：为什么用 Docker</a></li>
+    <li><a href="#docker-install"><span class="sec-no">02</span>安装 Docker Desktop（Mac）</a></li>
+    <li><a href="#tools"><span class="sec-no">03</span>串口工具与工作目录</a></li>
+    <li><a href="#dockerfile"><span class="sec-no">04</span>编写 Dockerfile 构建镜像</a></li>
+    <li><a href="#container"><span class="sec-no">05</span>启动容器与快捷入口</a></li>
+    <li><a href="#env"><span class="sec-no">06</span>进入容器：环境变量</a></li>
+    <li><a href="#bootstrap"><span class="sec-no">07</span>编译 AT91Bootstrap</a></li>
+    <li><a href="#uboot"><span class="sec-no">08</span>编译 U-Boot</a></li>
+    <li><a href="#kernel"><span class="sec-no">09</span>编译 Linux 内核</a></li>
+    <li><a href="#verify"><span class="sec-no">10</span>产物清单与验证</a></li>
+    <li><a href="#deploy"><span class="sec-no">11</span>Buildroot 构建与烧录上板</a></li>
+    <li><a href="#faq"><span class="sec-no">12</span>常见问题 FAQ</a></li>
+    <li><a href="#appendix"><span class="sec-no">13</span>附录：目录关系</a></li>
+  </ol>
+</nav>
+
+<!-- ==================== 1. 概念 ==================== -->
+<section id="concept">
+  <h2 class="step"><span class="num">1</span>核心概念：为什么用 Docker</h2>
+
+  <p>嵌入式 Linux 开发需要一个 Linux 构建环境（编译 Buildroot、跑交叉工具链）。Mac 是 macOS 系统，<strong>不能原生完成全部工作</strong>。有两种方案：</p>
+
+  <div class="table-wrap">
+  <table>
+    <tr><th></th><th>虚拟机（Parallels/UTM）</th><th>Docker 容器（本指南采用）</th></tr>
+    <tr><td>本质</td><td>虚拟一整套电脑，含完整 Ubuntu 内核</td><td>一个"工具箱"，借用 macOS 内核</td></tr>
+    <tr><td>资源占用</td><td>内存 2-4 GB，磁盘 20 GB+</td><td>内存几百 MB，磁盘约 1 GB</td></tr>
+    <tr><td>启动速度</td><td>30-60 秒</td><td>约 1 秒</td></tr>
+    <tr><td>文件共享</td><td>需配置共享文件夹</td><td>目录直接挂载，双向同步</td></tr>
+  </table>
+  </div>
+
+  <p><strong>生活化类比</strong>：你要喝一杯咖啡（编译工具），虚拟机是为此租了一整套公寓；Docker 是把咖啡机直接放在自家厨房台面——咖啡机一样，搭建的成本天差地别。</p>
+
+  <p>本指南最终构建的 SAMA5D27 启动链：</p>
+  <div class="flow">
+    <span class="node">Boot ROM（芯片固化）</span><span class="arrow">→</span>
+    <span class="node">AT91Bootstrap</span><span class="arrow">→</span>
+    <span class="node">U-Boot</span><span class="arrow">→</span>
+    <span class="node">Linux 内核</span><span class="arrow">→</span>
+    <span class="node">根文件系统</span>
+  </div>
+  <p>其中中间三环都在容器里交叉编译产出，最后在 Mac 上 <code class="inline">dd</code> 烧录到 SD 卡。</p>
+</section>
+
+<!-- ==================== 2. 安装 Docker ==================== -->
+<section id="docker-install">
+  <h2 class="step"><span class="num">2</span>安装 Docker Desktop（Mac）</h2>
+
+  <p>Docker Desktop 是 Docker 的官方 Mac 桌面应用。由于 macOS 安全限制，<strong>建议手动下载安装</strong>（brew 安装可能被权限机制拦截）。</p>
+
+  <h3>步骤 2.1：下载安装包</h3>
+  <p>浏览器打开官网 <code class="inline">https://www.docker.com/products/docker-desktop/</code>，选择 <strong>Download for Mac (Apple Silicon)</strong>（M 系列芯片）。</p>
+
+  <h3>步骤 2.2：安装</h3>
+  <ol>
+    <li>双击下载的 <code class="inline">Docker.dmg</code></li>
+    <li>把 Docker 图标拖入 Applications 文件夹</li>
+    <li>从启动台打开 Docker.app，首次启动点"允许"权限请求</li>
+    <li>接受服务条款，可跳过登录（Skip / Continue without signing in）</li>
+    <li>等菜单栏出现 🐳 鲸鱼图标，显示 "Docker Desktop is running"</li>
+  </ol>
+
+  <h3>步骤 2.3：验证安装</h3>
+  <div class="cmd-block">
+    <div class="label">在 Mac 终端执行</div>
+    <pre>docker --version</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>docker --version</code> — 查看 Docker 版本号。输出类似 <code>Docker version 27.x.x</code> 即安装成功。</li>
+    </ul>
+  </div>
+
+  <div class="cmd-block">
+    <div class="label">检查 Docker 后台服务是否在运行</div>
+    <pre>docker info --format '{{.ServerVersion}}'</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>docker info</code> — 查询 Docker 后台守护进程的状态。<code>--format</code> 只提取版本号字段。</li>
+      <li>如果这条命令报错，说明 Docker Desktop 应用没有启动——去菜单栏点开鲸鱼图标启动它。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== 3. 工具与目录 ==================== -->
+<section id="tools">
+  <h2 class="step"><span class="num">3</span>安装串口工具与创建工作目录</h2>
+
+  <h3>步骤 3.1：安装 Homebrew（如果没有）</h3>
+  <div class="cmd-block">
+    <div class="label">在 Mac 终端执行</div>
+    <pre><span class="comment"># 先检查是否已有 brew</span>
+which brew</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>which brew</code> — 查找 brew 命令的位置。有输出说明已安装；无输出则去 <code>brew.sh</code> 按官方指引安装。</li>
+    </ul>
+  </div>
+
+  <h3>步骤 3.2：安装 picocom（串口终端）</h3>
+  <div class="cmd-block">
+    <div class="label">在 Mac 终端执行</div>
+    <pre>brew install picocom</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>brew install 包名</code> — 用 Homebrew 安装软件。</li>
+      <li><code>picocom</code> 用于连接开发板调试串口。它装在 <strong>Mac 本地</strong>（不装在容器里），因为串口设备插在 Mac 上。</li>
+      <li>后续连接开发板：<code>picocom -b 115200 /dev/ttyACM0</code>（115200 是波特率）。退出按 <code>Ctrl+A</code> 再按 <code>Ctrl+X</code>。</li>
+    </ul>
+  </div>
+
+  <h3>步骤 3.3：创建工作目录</h3>
+  <div class="cmd-block">
+    <div class="label">在 Mac 终端执行</div>
+    <pre>mkdir -p ~/sama5</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>mkdir</code> — 创建目录（make directory）。</li>
+      <li><code>-p</code> — 递归创建，且目录已存在时不报错。</li>
+      <li><code>~/sama5</code> — <code>~</code> 是家目录的缩写（即 <code>/Users/你的用户名</code>）。这个目录将作为 Mac 与容器的共享桥梁。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== 4. Dockerfile ==================== -->
+<section id="dockerfile">
+  <h2 class="step"><span class="num">4</span>编写 Dockerfile 并构建镜像</h2>
+
+  <p>Dockerfile 是"镜像的配方"——描述这个 Ubuntu 环境里要装哪些工具。用任意编辑器创建文件 <code class="inline">~/sama5/Dockerfile</code>，内容如下：</p>
+
+  <pre>FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt update && apt install -y \
+    build-essential git wget curl flex bison bc \
+    libssl-dev libncurses-dev device-tree-compiler \
+    u-boot-tools gcc-arm-linux-gnueabihf \
+    python3 python3-pip rsync chrpath cpio \
+    libgnutls28-dev picocom minicom gdb-multiarch</pre>
+
+  <div class="cmd-explain">
+    <p><strong>逐行说明：</strong></p>
+    <ul>
+      <li><code>FROM ubuntu:22.04</code> — 以官方 Ubuntu 22.04 镜像为基础（LTS 长期支持版，Buildroot 官方推荐的构建环境）。</li>
+      <li><code>ENV DEBIAN_FRONTEND=noninteractive</code> — 安装软件时不弹交互式问答窗口（容器里没有图形界面）。</li>
+      <li><code>RUN apt update &amp;&amp; apt install -y ...</code> — 更新软件源后安装所有编译工具。<code>-y</code> 表示自动回答 yes。</li>
+    </ul>
+    <p><strong>关键软件包用途：</strong></p>
+    <ul>
+      <li><code>gcc-arm-linux-gnueabihf</code> — <strong>交叉编译器</strong>，最重要的一个。在你的 Mac 上生成 ARM 32 位指令集的可执行文件。</li>
+      <li><code>build-essential</code> — make、gcc 等基础编译工具。</li>
+      <li><code>device-tree-compiler</code> — dtc，编译设备树（.dts → .dtb）。</li>
+      <li><code>u-boot-tools</code> — 提供 mkimage，打包 U-Boot 镜像。</li>
+      <li><code>flex bison bc libssl-dev libncurses-dev</code> — 内核编译依赖（语法生成器、计算器、加密库、menuconfig 界面库）。</li>
+      <li><code>libgnutls28-dev</code> — U-Boot 新版编译必需（缺少会报 <code>gnutls/gnutls.h: No such file</code> 错误，实战踩过的坑）。</li>
+    </ul>
+  </div>
+
+  <h3>步骤 4.1：构建镜像</h3>
+  <div class="cmd-block">
+    <div class="label">在 Mac 终端执行（注意先进入 ~/sama5 目录）</div>
+    <pre>cd ~/sama5
+docker build -t sama5-build .</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>cd ~/sama5</code> — 进入工作目录。docker build 会在当前目录找 Dockerfile。</li>
+      <li><code>docker build</code> — 按 Dockerfile 构建镜像。</li>
+      <li><code>-t sama5-build</code> — 给镜像起名字（tag），方便以后引用。</li>
+      <li><code>.</code> — 构建上下文是当前目录。</li>
+      <li>首次构建需下载 Ubuntu 镜像并安装软件，约几分钟。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== 5. 容器 ==================== -->
+<section id="container">
+  <h2 class="step"><span class="num">5</span>启动容器与快捷入口</h2>
+
+  <h3>步骤 5.1：创建并启动容器</h3>
+  <div class="cmd-block">
+    <div class="label">在 Mac 终端执行</div>
+    <pre>docker run -d --name sama5-dev \
+  -v "$HOME/sama5:/work" \
+  -w /work \
+  sama5-build \
+  sleep infinity</pre>
+  </div>
+  <div class="cmd-explain">
+    <p><strong>参数逐个解释：</strong></p>
+    <ul>
+      <li><code>docker run</code> — 用镜像创建并启动一个容器。</li>
+      <li><code>-d</code> — 后台运行（detached），不占用当前终端。</li>
+      <li><code>--name sama5-dev</code> — 容器命名为 sama5-dev，以后用名字引用它。</li>
+      <li><code>-v "$HOME/sama5:/work"</code> — <strong>目录挂载</strong>，最关键的参数。把 Mac 的 <code>~/sama5</code> 目录映射为容器内的 <code>/work</code>。两边看到的是同一个文件夹：容器里编译出的文件，Mac 上立刻可见。</li>
+      <li><code>-w /work</code> — 进入容器后默认所在的工作目录（working dir）。</li>
+      <li><code>sama5-build</code> — 使用哪个镜像。</li>
+      <li><code>sleep infinity</code> — 容器启动后执行的命令。让容器永远保持运行（否则命令结束容器就停了）。</li>
+    </ul>
+  </div>
+
+  <h3>步骤 5.2：创建快捷入口脚本</h3>
+  <p>每次输入上面一长串太麻烦。创建 <code class="inline">~/sama5/enter.sh</code>：</p>
+
+  <pre>#!/bin/bash
+<span class="comment"># 如果容器没在运行，先启动它</span>
+docker start sama5-dev 2>/dev/null
+<span class="comment"># 进入容器的交互式终端</span>
+docker exec -it sama5-dev bash</pre>
+
+  <div class="cmd-explain">
+    <ul>
+      <li><code>#!/bin/bash</code> — 脚本固定首行，声明用 bash 解释执行。</li>
+      <li><code>docker start sama5-dev 2&gt;/dev/null</code> — 启动容器（若已在运行则无操作），错误输出丢弃。</li>
+      <li><code>docker exec -it sama5-dev bash</code> — 在已运行的容器里开一个交互式（<code>-it</code>）bash 终端。</li>
+    </ul>
+  </div>
+
+  <div class="cmd-block">
+    <div class="label">赋予脚本可执行权限</div>
+    <pre>chmod +x ~/sama5/enter.sh</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>chmod +x</code> — 给文件添加可执行权限（否则提示 Permission denied）。</li>
+    </ul>
+  </div>
+
+  <h3>步骤 5.3：进入容器</h3>
+  <div class="cmd-block">
+    <div class="label">以后每次进入容器，只需一条命令</div>
+    <pre>~/sama5/enter.sh</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li>执行后提示符从 <code>用户名@Mac ~ %</code> 变成 <code>root@容器ID:/work#</code>，说明你已在容器内的 Ubuntu 环境中。</li>
+      <li>可以同时开多个终端执行 <code>enter.sh</code>——多个"门"通向同一个容器，互不干扰。适合一边跑编译一边干别的。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== 6. 环境变量 ==================== -->
+<section id="env">
+  <h2 class="step"><span class="num">6</span>进入容器：环境变量配置</h2>
+
+  <p>编译前必须设置两个环境变量，告诉编译系统"用什么交叉编译器、目标什么架构"。</p>
+
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>export CROSS_COMPILE=arm-linux-gnueabihf-
+export ARCH=arm</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>export 变量=值</code> — 设置环境变量，当前终端及其子进程可见。</li>
+      <li><code>CROSS_COMPILE=arm-linux-gnueabihf-</code> — 交叉编译器的"前缀"。编译系统调用编译器时会自动拼成 <code>arm-linux-gnueabihf-gcc</code>、<code>arm-linux-gnueabihf-ld</code> 等。<strong>注意结尾的 <code>-</code> 不能少</strong>。</li>
+      <li><code>ARCH=arm</code> — 目标架构是 ARM 32 位（SAMA5D27 是 Cortex-A5 核心）。</li>
+      <li><strong>不设置会报错</strong>：<code>Error: the CROSS_COMPILE environment variable must be defined</code>（实战踩坑）。</li>
+    </ul>
+  </div>
+
+  <div class="tip">
+    <strong>💡 一劳永逸写法</strong>
+    <p><code>export</code> 只对当前终端有效，重开终端要重新设。写进 bashrc 自动生效：</p>
+    <pre>echo 'export CROSS_COMPILE=arm-linux-gnueabihf-' >> ~/.bashrc
+echo 'export ARCH=arm' >> ~/.bashrc</pre>
+    <p><code>&gt;&gt;</code> 表示追加到文件末尾（<code>~/.bashrc</code> 是容器内 bash 每次启动自动读取的配置文件）。注意：这里的 <code>~</code> 指容器内的 <code>/root</code>，别和 Mac 的家目录混淆。</p>
+  </div>
+
+  <h3>验证交叉编译器</h3>
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>arm-linux-gnueabihf-gcc --version
+echo "int main(){return 0;}" > /tmp/t.c && arm-linux-gnueabihf-gcc -o /tmp/t /tmp/t.c && file /tmp/t</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li>第一条显示编译器版本。</li>
+      <li>第二条做一个最小测试：写一个 hello world → 交叉编译 → <code>file</code> 查看产物格式。输出包含 <code>ELF 32-bit LSB ... ARM</code> 说明工具链工作正常。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== 7. AT91Bootstrap ==================== -->
+<section id="bootstrap">
+  <h2 class="step"><span class="num">7</span>编译 AT91Bootstrap（第一级引导）</h2>
+
+  <p>AT91Bootstrap 是芯片上电后 Boot ROM 最先加载的程序，负责初始化 DDR 内存、加载 U-Boot。</p>
+
+  <h3>步骤 7.1：克隆源码</h3>
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>cd /work
+git clone https://github.com/linux4sam/at91bootstrap.git
+cd at91bootstrap</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>cd /work</code> — 回到共享目录根，源码都放这里。</li>
+      <li><code>git clone URL</code> — 从 GitHub 下载完整源码仓库到当前目录下的 <code>at91bootstrap/</code> 文件夹。<strong>URL 必须完整</strong>，结尾是 <code>.git</code>——曾因少打一个 t（.gi）导致 git 把它当成不存在的仓库、要求输入用户名密码（实战踩坑）。</li>
+    </ul>
+  </div>
+
+  <h3>步骤 7.2：加载板级配置</h3>
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>make mrproper
+make sama5d27_som1_eksd_uboot_defconfig</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>make mrproper</code> — 清理所有编译产物和旧配置，回到干净状态。首次编译可省略，但重复编译前建议执行。</li>
+      <li><code>make xxx_defconfig</code> — 加载一份"默认配置"。配置名可拆解：<code>sama5d27_som1_ek</code> = 开发板型号；<code>sd</code> = 从 SD 卡启动；<code>uboot</code> = 下一步引导 U-Boot。</li>
+      <li>想看所有可用配置：<code>ls configs/ | grep sama5d27</code></li>
+    </ul>
+  </div>
+
+  <h3>步骤 7.3：编译</h3>
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>make -j$(nproc)</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>-j$(nproc)</code> — 并行编译。<code>$(nproc)</code> 会被替换成 CPU 核心数，几个核心就同时跑几个编译任务，大幅加速。</li>
+      <li>编译约 1-2 分钟。成功的标志是输出：</li>
+    </ul>
+    <pre>[Succeeded] It's OK to fit into SRAM area</pre>
+    <p>这条表示镜像大小能装进芯片的 SRAM（硬性约束）。同时会显示给栈留了多少空间。</p>
+  </div>
+
+  <h3>步骤 7.4：确认产物</h3>
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>find . -name "*.bin" -ls</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>find . -name "*.bin"</code> — 在当前目录递归查找所有 .bin 文件。<code>-ls</code> 用长格式显示详情。</li>
+      <li>产物在 <strong><code>build/binaries/</code></strong> 下（注意：4.0.x 新版路径和老版不同，老版直接在 <code>binaries/</code>）。主要文件：<code>sama5d2-sdcardboot-uboot-4.0.x.bin</code>（约 17KB），旁边的 <code>at91bootstrap.bin</code>、<code>boot.bin</code> 都是它的软链接。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== 8. U-Boot ==================== -->
+<section id="uboot">
+  <h2 class="step"><span class="num">8</span>编译 U-Boot（第二级引导）</h2>
+
+  <p>U-Boot 是通用 Bootloader，负责加载 Linux 内核，并提供一个串口命令行（开发阶段最重要的调试入口）。</p>
+
+  <h3>步骤 8.1：克隆并配置</h3>
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>cd /work
+git clone https://github.com/linux4sam/u-boot-at91.git
+cd u-boot-at91
+make sama5d27_som1_ek_mmc_defconfig</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>sama5d27_som1_ek_mmc_defconfig</code> — 板型 + mmc（SD 卡）介质的默认配置。</li>
+    </ul>
+  </div>
+
+  <h3>步骤 8.2：编译</h3>
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>make -j$(nproc)</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li>约 5-10 分钟。若报错 <code>fatal error: gnutls/gnutls.h: No such file or directory</code>，装库后重编：</li>
+    </ul>
+    <pre>apt update && apt install -y libgnutls28-dev
+make -j$(nproc)</pre>
+    <p>（Dockerfile 里已包含此包，此坑一般不会再现；重编不需要 make clean。）</p>
+  </div>
+
+  <h3>步骤 8.3：验证产物</h3>
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>ls -lh u-boot.bin
+file u-boot.bin</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>ls -lh</code> — <code>-l</code> 长格式，<code>-h</code> 人类可读的大小（K/M/G）。正常 <code>u-boot.bin</code> 约 470KB。</li>
+      <li><strong>注意</strong>：此配置下没有 <code>spl/u-boot-spl.bin</code> 是正常的——SAMA5D27 用 AT91Bootstrap 做第一级引导，不需要 U-Boot 的 SPL。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== 9. 内核 ==================== -->
+<section id="kernel">
+  <h2 class="step"><span class="num">9</span>编译 Linux 内核与设备树</h2>
+
+  <h3>步骤 9.1：克隆内核源码（大工程，耐心）</h3>
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>cd /work
+git clone https://github.com/linux4sam/linux-at91.git</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li>内核仓库约 <strong>3.6 GB、1200 万个对象</strong>，克隆十几分钟。下载分两个阶段：</li>
+      <li><code>Receiving objects</code> — 从服务器传输压缩数据（下载）。</li>
+      <li><code>Resolving deltas</code> — 本地解析差分对象（组装）。git 为省空间不存每个文件的每个完整版本，只存"基础版本 + 差异记录"，此阶段就是把差异链还原、建立引用关系。</li>
+    </ul>
+  </div>
+
+  <div class="warn">
+    <strong>⚠️ 千万不要中途 Ctrl+C</strong>
+    <p>必须等 <code>Resolving deltas: 100%</code> 出现且提示符回来。打断会让仓库残缺，只能删除重来：</p>
+    <pre>rm -rf linux-at91</pre>
+    <p>之后重新 clone。<code>rm -rf</code> 是递归强制删除，路径一定要确认无误再回车。</p>
+  </div>
+
+  <h3>步骤 9.2：切换分支</h3>
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>cd linux-at91
+git checkout linux-6.1-mchp
+git branch</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li>仓库里同时保存多条开发线（分支）：克隆后默认在 master。<code>linux-6.1-mchp</code> 是 Microchip 维护的 6.1 稳定分支，官方推荐用于 SAMA5D2。</li>
+      <li><code>git checkout 分支名</code> — 把工作目录的文件内容替换成该分支的版本。</li>
+      <li><code>git branch</code> — 查看当前所在分支，带 <code>*</code> 的是当前分支。</li>
+    </ul>
+  </div>
+
+  <h3>步骤 9.3：加载配置并编译</h3>
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>make sama5_defconfig
+make -j$(nproc)</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>make sama5_defconfig</code> — 加载 SAMA5 全系列默认内核配置（含各开发板支持）。</li>
+      <li><code>make -j$(nproc)</code> — 编译。约 10-20 分钟，期间大量刷屏是正常现象。</li>
+      <li><strong>编译时可以切走</strong>：新开终端标签（Mac 终端按 <code>Cmd+T</code>）干别的，互不影响；但不要关闭原窗口、不要按 Ctrl+C/Z。</li>
+      <li>更保险的后台跑法：<code>nohup make -j$(nproc) &gt; build.log 2>&amp;1 &amp;</code>，用 <code>tail -f build.log</code> 看进度。</li>
+      <li>若需自定义配置（添加驱动、协议等），在编译前执行 <code>make menuconfig</code> 打开图形化配置界面。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== 10. 验证 ==================== -->
+<section id="verify">
+  <h2 class="step"><span class="num">10</span>产物清单与验证</h2>
+
+  <div class="cmd-block">
+    <div class="label">在容器内执行</div>
+    <pre>ls -lh arch/arm/boot/zImage
+ls -lh arch/arm/boot/dts/at91-sama5d27_som1_ek.dtb</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>zImage</code> — 压缩的 Linux 内核镜像，约 5-8 MB。</li>
+      <li><code>at91-sama5d27_som1_ek.dtb</code> — 设备树二进制（描述板卡硬件信息，内核启动时解析）。</li>
+      <li>两个都存在 = 内核编译成功。</li>
+      <li>找不到文件时可用 <code>find arch/arm/boot/dts -name "*sama5d27*"</code> 定位实际文件名。</li>
+    </ul>
+  </div>
+
+  <h3>全部产物总览</h3>
+  <div class="table-wrap">
+  <table>
+    <tr><th>产物</th><th>路径（/work 下）</th><th>作用</th></tr>
+    <tr>
+      <td>AT91Bootstrap</td>
+      <td><code>at91bootstrap/build/binaries/sama5d2-sdcardboot-uboot-*.bin</code></td>
+      <td>第一级引导：初始化 DDR、加载 U-Boot</td>
+    </tr>
+    <tr>
+      <td>U-Boot</td>
+      <td><code>u-boot-at91/u-boot.bin</code></td>
+      <td>第二级引导：加载内核、串口调试命令行</td>
+    </tr>
+    <tr>
+      <td>内核</td>
+      <td><code>linux-at91/arch/arm/boot/zImage</code></td>
+      <td>Linux 内核压缩镜像</td>
+    </tr>
+    <tr>
+      <td>设备树</td>
+      <td><code>linux-at91/arch/arm/boot/dts/at91-sama5d27_som1_ek.dtb</code></td>
+      <td>板卡硬件描述</td>
+    </tr>
+  </table>
+  </div>
+
+  <div class="note">
+    <strong>✅ 里程碑</strong>
+    <p>到这里，启动链的前三环全部就绪。还差最后一环——根文件系统（rootfs），见第 11 节：用 Buildroot 构建并烧录上板验证。</p>
+  </div>
+</section>
+
+<!-- ==================== 11. Buildroot 与烧录上板 ==================== -->
+<section id="deploy">
+  <h2 class="step"><span class="num">11</span>Buildroot 构建与烧录上板</h2>
+
+  <p>内核 + 引导都编译好之后，还差最后一环：<strong>根文件系统（rootfs）</strong>——内核启动后要挂载的"系统盘"，没有它内核会直接 panic。Buildroot 会自动把引导、内核、设备树、rootfs 打包成一个<strong>布局正确的完整 SD 卡镜像</strong>，一条 <code class="inline">dd</code> 就能烧录，无需手工摆放文件。</p>
+
+  <figure style="margin:20px 0 24px;">
+    <svg viewBox="0 0 680 420" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:rgba(255,255,255,0.55);border:1px solid rgba(31,61,40,0.25);border-radius:14px;">
+      <defs>
+        <marker id="ar-g" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#1f7a4d"/></marker>
+        <marker id="ar-r" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#b84a3a"/></marker>
+      </defs>
+      <text x="340" y="30" text-anchor="middle" font-size="16" font-weight="bold" fill="#1f7a4d" font-family="PingFang SC, sans-serif">内核启动的最后一步：挂载 rootfs 并启动 1 号进程</text>
+
+      <!-- 正常流程 -->
+      <rect x="30" y="62" width="160" height="54" rx="10" fill="#ffffff" stroke="#1f7a4d" stroke-width="1.5"/>
+      <text x="110" y="85" text-anchor="middle" font-size="13" fill="#2a2a2a" font-family="PingFang SC, sans-serif">内核自解压启动</text>
+      <text x="110" y="104" text-anchor="middle" font-size="11" fill="#777" font-family="PingFang SC, sans-serif">初始化内存/时钟/中断</text>
+
+      <rect x="30" y="156" width="160" height="54" rx="10" fill="#ffffff" stroke="#1f7a4d" stroke-width="1.5"/>
+      <text x="110" y="179" text-anchor="middle" font-size="13" fill="#2a2a2a" font-family="PingFang SC, sans-serif">解析设备树</text>
+      <text x="110" y="198" text-anchor="middle" font-size="11" fill="#777" font-family="PingFang SC, sans-serif">发现有哪些硬件</text>
+
+      <rect x="30" y="250" width="160" height="54" rx="10" fill="#ffffff" stroke="#1f7a4d" stroke-width="1.5"/>
+      <text x="110" y="273" text-anchor="middle" font-size="13" fill="#2a2a2a" font-family="PingFang SC, sans-serif">挂载根文件系统</text>
+      <text x="110" y="292" text-anchor="middle" font-size="11" fill="#777" font-family="PingFang SC, sans-serif">root=/dev/mmcblk0p2</text>
+
+      <rect x="30" y="344" width="160" height="54" rx="10" fill="#e8f5ec" stroke="#1f7a4d" stroke-width="2"/>
+      <text x="110" y="367" text-anchor="middle" font-size="13" fill="#1f7a4d" font-weight="bold" font-family="PingFang SC, sans-serif">执行 /sbin/init</text>
+      <text x="110" y="386" text-anchor="middle" font-size="11" fill="#777" font-family="PingFang SC, sans-serif">1 号进程 → 用户世界</text>
+
+      <line x1="110" y1="116" x2="110" y2="154" stroke="#1f7a4d" stroke-width="1.5" marker-end="url(#ar-g)"/>
+      <line x1="110" y1="210" x2="110" y2="248" stroke="#1f7a4d" stroke-width="1.5" marker-end="url(#ar-g)"/>
+      <line x1="110" y1="304" x2="110" y2="342" stroke="#1f7a4d" stroke-width="1.5" marker-end="url(#ar-g)"/>
+
+      <!-- panic 分支 -->
+      <rect x="430" y="250" width="220" height="54" rx="10" fill="#fbeae7" stroke="#b84a3a" stroke-width="2"/>
+      <text x="540" y="273" text-anchor="middle" font-size="13" fill="#b84a3a" font-weight="bold" font-family="PingFang SC, sans-serif">找不到根文件系统</text>
+      <text x="540" y="292" text-anchor="middle" font-size="10.5" fill="#b84a3a" font-family="Menlo, monospace">VFS: Unable to mount root fs</text>
+
+      <rect x="430" y="344" width="220" height="54" rx="10" fill="#f5d9d4" stroke="#b84a3a" stroke-width="2"/>
+      <text x="540" y="367" text-anchor="middle" font-size="12.5" fill="#b84a3a" font-weight="bold" font-family="PingFang SC, sans-serif">Kernel panic - not syncing</text>
+      <text x="540" y="386" text-anchor="middle" font-size="11" fill="#b84a3a" font-family="PingFang SC, sans-serif">系统死机，只能复位</text>
+
+      <path d="M192 277 C 300 277, 340 277, 428 277" stroke="#b84a3a" stroke-width="1.5" fill="none" marker-end="url(#ar-r)" stroke-dasharray="5,4"/>
+      <line x1="540" y1="304" x2="540" y2="342" stroke="#b84a3a" stroke-width="1.5" marker-end="url(#ar-r)"/>
+
+      <text x="310" y="270" text-anchor="middle" font-size="11" fill="#b84a3a" font-family="PingFang SC, sans-serif">rootfs 分区不存在</text>
+
+      <!-- 关键点 -->
+      <rect x="240" y="62" width="410" height="160" rx="12" fill="#f4faf5" stroke="#1f7a4d" stroke-width="1"/>
+      <text x="262" y="92" font-size="13.5" font-weight="bold" fill="#1f7a4d" font-family="PingFang SC, sans-serif">内核自己只是个"程序"，不带任何文件</text>
+      <text x="262" y="118" font-size="12" fill="#444" font-family="PingFang SC, sans-serif">· 内核映像 (zImage) 里只有内核代码和驱动，约 5-8MB</text>
+      <text x="262" y="141" font-size="12" fill="#444" font-family="PingFang SC, sans-serif">· shell、ls、libc 这些程序和库都不在内核里，在 rootfs 里</text>
+      <text x="262" y="164" font-size="12" fill="#444" font-family="PingFang SC, sans-serif">· 内核启动完必须从 rootfs 里找到 init 程序来执行</text>
+      <text x="262" y="196" font-size="12" fill="#b84a3a" font-family="PingFang SC, sans-serif">找不到 rootfs = 没有下家 = 内核无事可做 → panic</text>
+    </svg>
+    <figcaption style="text-align:center;font-size:12.5px;color:#6a8a72;margin-top:8px;">图：为什么没有根文件系统内核会 panic —— 内核的终点是执行 rootfs 里的 /sbin/init</figcaption>
+  </figure>
+
+  <div class="tip">
+    <strong>💡 我手动编译的三件套白做了吗？</strong>
+    <p>没有白做，但要明白一件事：<strong>Buildroot 是一站式全量构建</strong>——它会按自己的配置重新编译一份 AT91Bootstrap、U-Boot、内核和设备树，最终 <code>sdcard.img</code> 里装的是 Buildroot 编的那套，而不是你手动编译的产物。</p>
+    <p>手动编译的价值在于<strong>学习和理解</strong>：走完第 7-9 节，你就清楚启动链每一环是什么、怎么编译出来的、产物长什么样。今后想单独替换内核或 U-Boot 做调试时（改一行内核代码重新 <code>make</code> 再单独烧 zImage），这些手动技能就是日常工作的基本盘。</p>
+    <p>第一次上板验证，直接用 Buildroot 的完整镜像即可，最省心。</p>
+  </div>
+
+  <h3>深入理解：rootfs 为什么不像内核那样"单独 make"就行？</h3>
+  <p>常见误解是"根文件系统必须用 Buildroot"。实际上 <strong>rootfs 完全可以单独构建，Buildroot 只是自动化工具</strong>。但它和前三样（引导/内核）有本质区别，导致单独构建的难度完全不在一个量级——一个是在"编译"，一个是在"组装"：</p>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>对比项</th><th>引导 / 内核</th><th>根文件系统</th></tr>
+      <tr>
+        <td><strong>形态</strong></td>
+        <td>一个源码仓库，一个编译产物</td>
+        <td>几百个软件包的集合，拼成一棵目录树</td>
+      </tr>
+      <tr>
+        <td><strong>源码</strong></td>
+        <td>at91bootstrap / u-boot / linux 各自一个 git 仓库</td>
+        <td>busybox、libc、openssl……每样来自不同项目</td>
+      </tr>
+      <tr>
+        <td><strong>构建方式</strong></td>
+        <td><code>make defconfig</code> + <code>make</code> 一条龙</td>
+        <td>每个包有自己的构建系统，交叉编译各有各的坑</td>
+      </tr>
+      <tr>
+        <td><strong>产物</strong></td>
+        <td>一个 <code>.bin</code> / <code>zImage</code></td>
+        <td>一棵目录树（/bin /lib /etc /dev...），再打成镜像</td>
+      </tr>
+    </table>
+  </div>
+
+  <p>AT91Bootstrap 和内核再复杂，也是"一个项目编译出一个文件"。而 rootfs 是"把几百个用户态程序 + 库全部交叉编译好、装进正确目录"——这活不是编译，是<strong>包管理</strong>。手工做为什么会痛苦：</p>
+  <ul>
+    <li><strong>架构不匹配</strong> — 每个包都要用 <code>arm-linux-gnueabihf-gcc</code> 重新编译，各项目对交叉编译的支持参差不齐；</li>
+    <li><strong>依赖地狱</strong> — openssl 依赖 zlib、每个 app 依赖 libc……必须按正确顺序逐个编译安装；</li>
+    <li><strong>sysroot 路径问题</strong> — 编译时找头文件、链接时找库，路径一错就是各种诡异的 file not found；</li>
+    <li><strong>运行时文件</strong> — <code>/dev</code> 设备节点、<code>/etc/inittab</code>、启动脚本、权限……全要手工摆。</li>
+  </ul>
+  <p>Buildroot 的价值就是把这套"逐包交叉编译 + 依赖排序 + 装目录 + 生成镜像"的脏活全自动化（Yocto 干的是同一件事，更工业级也更复杂）。</p>
+
+  <details>
+    <summary>进阶：不用 Buildroot，手工做一个最小 rootfs（推荐试一次）</summary>
+    <div class="body">
+      <p>最小系统能小到什么程度？<strong>一个 busybox 就够了</strong>——它一个程序内嵌了 ls/cd/cp/sh 等三百多个常用命令。走一遍这个流程，你会彻底搞懂 rootfs 就是一棵目录树，没有任何魔法。</p>
+      <div class="cmd-block">
+        <div class="label">容器内 · 编译 busybox 并生成目录树</div>
+        <pre>git clone https://git.busybox.net/busybox
+cd busybox
+make defconfig
+make CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc)
+make CROSS_COMPILE=arm-linux-gnueabihf- CONFIG_PREFIX=/work/my-rootfs install</pre>
+      </div>
+      <div class="cmd-explain">
+        <ul>
+          <li><code>make defconfig</code> — 启用几乎全部功能的默认配置。</li>
+          <li><code>CONFIG_PREFIX=/work/my-rootfs</code> — 把 busybox 及其命令链接安装到该目录（生成 bin/ sbin/ usr/ 等结构）。</li>
+        </ul>
+      </div>
+      <div class="cmd-block">
+        <div class="label">容器内 · 手工补齐目录、设备节点与启动配置</div>
+        <pre>cd /work/my-rootfs
+mkdir -p dev etc proc sys tmp
+mknod -m 666 dev/console c 5 1
+mknod -m 666 dev/null c 1 3</pre>
+      </div>
+      <div class="cmd-explain">
+        <ul>
+          <li><code>dev/console</code> — 内核的控制台设备，没有它 init 起来也没有输出。</li>
+          <li><code>dev/null</code> — 大量程序默认会写它，缺失会报错。</li>
+        </ul>
+      </div>
+      <div class="cmd-block">
+        <div class="label">容器内 · 写最小 inittab 并打包成 ext4 镜像</div>
+        <pre>echo "::sysinit:/bin/mount -t proc proc /proc" > etc/inittab
+echo "::sysinit:/bin/mount -t sysfs sysfs /sys" >> etc/inittab
+echo "ttyS0::respawn:/bin/sh" >> etc/inittab
+cd /work
+dd if=/dev/zero of=my-rootfs.ext4 bs=1M count=64
+mkfs.ext4 -d my-rootfs my-rootfs.ext4</pre>
+      </div>
+      <div class="cmd-explain">
+        <ul>
+          <li><code>inittab</code> — busybox init 读取的启动配置：挂载 proc/sysfs，然后在串口 ttyS0 上反复拉起 shell。</li>
+          <li><code>mkfs.ext4 -d 目录</code> — 把目录树直接填进 ext4 镜像文件（需要 e2fsprogs，容器内 <code>apt install -y e2fsprogs</code>）。</li>
+          <li>把这个 64MB 镜像写入 SD 卡第二分区，配合前面的内核即可启动到一个纯 busybox 的 shell。</li>
+        </ul>
+      </div>
+      <div class="note">
+        <strong>✅ 学习路径建议</strong>
+        <p>先手工做一次 busybox rootfs（理解原理），以后项目里再用 Buildroot（效率）——和前面"先手动编译三件套、再用 Buildroot 全量构建"是同一个逻辑。</p>
+      </div>
+    </div>
+  </details>
+
+  <h3>步骤 11.1：构建 Buildroot（容器内）</h3>
+  <div class="cmd-block">
+    <div class="label">容器内 · 首次构建约 1-2 小时</div>
+    <pre>cd /work
+git clone https://github.com/linux4sam/buildroot-at91.git
+cd buildroot-at91
+ls configs/ | grep sama5d2
+make atmel_sama5d27_som1_ek_mmc_dev_defconfig
+make -j$(nproc)</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>ls configs/ | grep sama5d2</code> — 先列出该仓库实际提供的 SAMA5D2 系列配置，避免配置名写错。</li>
+      <li><code>make atmel_sama5d27_som1_ek_mmc_dev_defconfig</code> — 加载官方为 SAMA5D27 SOM1 EK 准备的默认配置。命名规则：<code>atmel_</code> = 老产品线前缀（Microchip 收购前），<code>_mmc</code> = SD 卡启动，<code>_dev</code> = 开发者版镜像（多带演示程序和调试工具，linux4sam 官网预编译 demo 即出自此配置）。</li>
+      <li><code>make -j$(nproc)</code> — 全自动构建：下载并交叉编译工具链、内核、引导、几百个软件包。首次耗时 1-2 小时，中途不能 Ctrl+C。</li>
+    </ul>
+  </div>
+
+  <div class="tip">
+    <strong>💡 建议用后台方式跑，防手滑</strong>
+    <pre>nohup make -j$(nproc) > build.log 2>&1 &
+tail -f build.log</pre>
+    <p>编译输出全部写进 <code>build.log</code>；<code>tail -f</code> 随时看进度，此时按 Ctrl+C 只退出查看、不影响后台编译。</p>
+  </div>
+
+  <h3>步骤 11.2：确认镜像产物</h3>
+  <div class="cmd-block">
+    <div class="label">容器内</div>
+    <pre>ls -lh output/images/sdcard.img</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>sdcard.img</code> — 完整 SD 卡镜像，内含分区表 + 引导 + 内核 + rootfs，通常几百 MB。它在 <code>/work</code> 挂载目录下，Mac 端路径即 <code>~/sama5/buildroot-at91/output/images/sdcard.img</code>。</li>
+    </ul>
+  </div>
+
+  <h3>步骤 11.3：Mac 上烧录 SD 卡</h3>
+  <p>以下命令在 <strong>Mac 终端</strong>执行（不进容器）：</p>
+  <div class="cmd-block">
+    <div class="label">Mac 终端 · 烧录前先确认设备名</div>
+    <pre>diskutil list
+diskutil unmountDisk /dev/diskN
+sudo dd if=~/sama5/buildroot-at91/output/images/sdcard.img of=/dev/rdiskN bs=1m
+diskutil eject /dev/diskN</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>diskutil list</code> — 列出所有磁盘，<strong>根据容量确认 SD 卡的编号 N</strong>（比如 16GB 的卡就找 15-16GB 的那个）。</li>
+      <li><code>diskutil unmountDisk /dev/diskN</code> — 卸载分区（不弹出磁盘），dd 前必须做，否则会提示 Resource busy。</li>
+      <li><code>dd if=... of=/dev/rdiskN bs=1m</code> — 把镜像逐块写入整卡。<code>rdiskN</code> 是裸设备通道，比 <code>diskN</code> 快很多。</li>
+      <li><code>diskutil eject</code> — 安全弹出。</li>
+    </ul>
+  </div>
+
+  <div class="warn">
+    <strong>⚠️ dd 目标盘绝不能写错</strong>
+    <p><code>of=</code> 写错成移动硬盘/系统盘会<strong>不可逆地毁掉那块盘的数据</strong>。执行前务必再次核对 <code>diskutil list</code> 里的编号和容量。烧录期间十几分钟无输出是正常的，等提示符回来再弹出。</p>
+  </div>
+
+  <h3>步骤 11.4：上板验证</h3>
+  <ol>
+    <li>SD 卡插入开发板卡槽</li>
+    <li>USB 线连接板子调试口到 Mac</li>
+    <li>打开串口终端：</li>
+  </ol>
+  <div class="cmd-block">
+    <div class="label">Mac 终端</div>
+    <pre>ls /dev/tty.usb*
+sudo picocom -b 115200 /dev/tty.usbmodemXXXX</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>ls /dev/tty.usb*</code> — 找到调试串口的设备名（如 <code>/dev/tty.usbmodemXXXX</code> 或 <code>/dev/tty.usbserial-XXXX</code>）。</li>
+      <li><code>picocom -b 115200</code> — 以 115200 波特率连接。退出方式：先按 <code>Ctrl+A</code>，再按 <code>Ctrl+X</code>。</li>
+    </ul>
+  </div>
+
+  <p>按板子复位键，串口里应依次出现完整的启动链日志：</p>
+  <div class="flow">
+    <span class="node">RomBOOT</span><span class="arrow">→</span>
+    <span class="node">AT91Bootstrap</span><span class="arrow">→</span>
+    <span class="node">U-Boot</span><span class="arrow">→</span>
+    <span class="node">Starting kernel...</span><span class="arrow">→</span>
+    <span class="node">Welcome to Buildroot</span>
+  </div>
+
+  <p>出现 <code>login:</code> 提示后输入 <code>root</code> 回车（Buildroot 默认无密码），看到 <code>#</code> 提示符——<strong>系统完整跑通</strong>。可以试试：</p>
+  <div class="cmd-block">
+    <div class="label">目标板串口终端</div>
+    <pre>cat /proc/cpuinfo
+ls /
+ifconfig -a</pre>
+  </div>
+  <div class="cmd-explain">
+    <ul>
+      <li><code>cat /proc/cpuinfo</code> — 查看 CPU 信息（应显示 ARMv7 Processor）。</li>
+      <li><code>ls /</code> — 根文件系统目录结构。</li>
+      <li><code>ifconfig -a</code> — 查看网络接口（后续网络调试、scp 传文件都靠它）。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== 12. FAQ ==================== -->
+<section id="faq">
+  <h2 class="step"><span class="num">12</span>常见问题 FAQ（实战踩坑记录）</h2>
+
+  <details>
+    <summary>make 报错：CROSS_COMPILE environment variable must be defined</summary>
+    <div class="body">
+      <p>没设交叉编译器环境变量。解决：</p>
+      <pre>export CROSS_COMPILE=arm-linux-gnueabihf-
+export ARCH=arm</pre>
+      <p>建议写进 <code>~/.bashrc</code>（容器内的）一劳永逸。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>编译 U-Boot 报错：gnutls/gnutls.h: No such file or directory</summary>
+    <div class="body">
+      <p>缺少加密库开发头文件。解决：</p>
+      <pre>apt update && apt install -y libgnutls28-dev
+make -j$(nproc)</pre>
+      <p>装完直接重编，无需 make clean。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>git clone 提示 Username for 'https://github.com'</summary>
+    <div class="body">
+      <p>大概率是 URL 打错了（比如结尾 <code>.gi</code> 少了 <code>t</code>），git 把它当成需要认证的私有仓库。按 Ctrl+C 退出，仔细核对完整 URL（<code>.git</code> 结尾）。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>at91bootstrap 编译成功但找不到 binaries/ 目录</summary>
+    <div class="body">
+      <p>4.0.x 新版产物路径改为 <code>build/binaries/</code>。用 <code>find . -name "*.bin" -ls</code> 定位。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>找不到 sama5d27_som1_ek.dtb 设备树文件</summary>
+    <div class="body">
+      <p>linux-6.1-mchp 分支的设备树还是老命名：文件叫 <code>at91-sama5d27_som1_ek.dtb</code>，直接在 <code>arch/arm/boot/dts/</code> 目录下（没有 <code>microchip/</code> 子目录）。不确定时用：</p>
+      <pre>find arch/arm/boot/dts -name "*sama5d27*"</pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>Buildroot 报 "Can't find sama5d27_som1_ek_mmc_defconfig"</summary>
+    <div class="body">
+      <p>buildroot-at91 仓库的配置名带厂商前缀和版本后缀，SAMA5D27 SOM1 EK 实际叫 <code>atmel_sama5d27_som1_ek_mmc_dev_defconfig</code>。不确定时先列出可选配置：</p>
+      <pre>ls configs/ | grep sama5d2</pre>
+    </div>
+  </details>
+
+  <details>
+    <summary>编译成功的标志是什么？</summary>
+    <div class="body">
+      <p>命令结束后回到提示符，且最后没有 <code>Error</code>。AT91Bootstrap 额外会打印 <code>[Succeeded] It's OK to fit into SRAM area</code>。最终以"产物文件存在且有合理大小"为准（见第 10 节验证命令）。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>编译到一半能切出去做别的事吗？</summary>
+    <div class="body">
+      <p>能。新开终端标签（Cmd+T）即可，编译继续。但不要关闭原终端窗口、不要按 Ctrl+C（会杀掉编译进程）。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>spl/u-boot-spl.bin 不存在，是失败了吗？</summary>
+    <div class="body">
+      <p>不是。SAMA5D27 的启动链用 AT91Bootstrap 承担第一级引导，此配置下 U-Boot 不需要 SPL。<code>u-boot.bin</code>（约 470KB）存在即成功。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>容器重启后编译环境还在吗？</summary>
+    <div class="body">
+      <p>在。容器是持久化的：装过的软件包、源码、编译产物都保留。只有 <code>export</code> 的环境变量会丢（所以建议写进 bashrc）。用 <code>~/sama5/enter.sh</code>（Mac 端）随时回到环境。</p>
+    </div>
+  </details>
+</section>
+
+<!-- ==================== 13. 附录 ==================== -->
+<section id="appendix">
+  <h2 class="step"><span class="num">13</span>附录：Mac 与容器的目录关系</h2>
+
+  <p>新手最容易混淆的一点——<strong>两个系统各有各的家目录</strong>：</p>
+
+  <div class="table-wrap">
+  <table>
+    <tr><th>你在哪</th><th>提示符长这样</th><th><code>~</code> 指向</th><th>enter.sh 位置</th></tr>
+    <tr><td>Mac 终端</td><td><code>用户名@Mac ~ %</code></td><td><code>/Users/用户名</code></td><td><code>~/sama5/enter.sh</code></td>
+    </tr>
+    <tr><td>容器内</td><td><code>root@容器ID:/work#</code></td><td><code>/root</code></td><td><code>/work/enter.sh</code></td></tr>
+  </table>
+  </div>
+
+  <p>两边的桥梁是目录挂载：</p>
+  <pre>Mac 的 ~/sama5/  ←——同一文件夹——→  容器的 /work/
+├── Dockerfile
+├── enter.sh
+├── at91bootstrap/     ← 容器里编译
+├── u-boot-at91/       ← 容器里编译
+└── linux-at91/        ← 容器里编译</pre>
+
+  <p><strong>分工原则</strong>：编译类操作（make、git）在容器里做；与硬件相关的操作（dd 烧 SD 卡、picocom 连串口）在 Mac 上做，因为设备插在 Mac 上。</p>
+</section>
+
+<footer>
+  SAMA5D27 嵌入式 Linux 开发指南 · 基于 linux4sam（AT91Bootstrap 4.0.x / linux-6.1-mchp 分支）· 全手动操作版
+</footer>
+
+</div>
+
+<script>
+(function () {
+  function copyText(text, done) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(text, done); });
+    } else { fallback(text, done); }
+  }
+  function fallback(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  document.querySelectorAll("pre").forEach(function (pre) {
+    // 1. 取出 pre 的纯文本（含注释标记）
+    var raw = pre.textContent.replace(/\r\n?/g, "\n");
+    var lines = raw.split("\n");
+
+    // 2. 记下 pre 自身的 padding-right，给复制按钮预留空间
+    var style = window.getComputedStyle(pre);
+    var prPad = parseFloat(style.paddingRight) || 0;
+
+    // 3. 清空 pre 内容，逐行重建
+    pre.textContent = "";
+
+    lines.forEach(function (line) {
+      var row = document.createElement("div");
+      row.className = "cmd-row";
+
+      var trimmed = line.replace(/^\s+|\s+$/g, "");
+      if (trimmed === "") {
+        row.classList.add("is-blank");
+        pre.appendChild(row);
+        return;
+      }
+
+      var text = document.createElement("span");
+      text.className = "cmd-text";
+      text.textContent = line; // 保留原缩进
+
+      // 整行是注释 → 灰色显示，不放按钮
+      if (/^\s*#/.test(line)) {
+        row.classList.add("is-comment");
+        row.appendChild(text);
+        pre.appendChild(row);
+        return;
+      }
+
+      // 命令行：放复制按钮
+      var btn = document.createElement("button");
+      btn.className = "copy-btn";
+      btn.type = "button";
+      btn.textContent = "复制";
+      btn.addEventListener("click", function () {
+        var payload = line.replace(/^\s+|\s+$/g, "");
+        copyText(payload, function () {
+          btn.textContent = "已复制 ✓";
+          btn.classList.add("copied");
+          setTimeout(function () {
+            btn.textContent = "复制";
+            btn.classList.remove("copied");
+          }, 1600);
+        });
+      });
+
+      row.appendChild(text);
+      row.appendChild(btn);
+      pre.appendChild(row);
+    });
+  });
+})();
+</script>
+</body>
+</html>
