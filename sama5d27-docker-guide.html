@@ -349,8 +349,9 @@
     <li><a href="#kernel"><span class="sec-no">09</span>编译 Linux 内核</a></li>
     <li><a href="#verify"><span class="sec-no">10</span>产物清单与验证</a></li>
     <li><a href="#deploy"><span class="sec-no">11</span>Buildroot 构建与烧录上板</a></li>
-    <li><a href="#faq"><span class="sec-no">12</span>常见问题 FAQ</a></li>
-    <li><a href="#appendix"><span class="sec-no">13</span>附录：目录关系</a></li>
+    <li><a href="#bootchain"><span class="sec-no">12</span>SD 卡启动链深度解析</a></li>
+    <li><a href="#faq"><span class="sec-no">13</span>常见问题 FAQ</a></li>
+    <li><a href="#appendix"><span class="sec-no">14</span>附录：目录关系</a></li>
   </ol>
 </nav>
 
@@ -1332,9 +1333,495 @@ ifconfig -a</pre>
   </div>
 </section>
 
-<!-- ==================== 12. FAQ ==================== -->
+<!-- ==================== 12. 启动链深度解析 ==================== -->
+<section id="bootchain">
+  <h2 class="step"><span class="num">12</span>SD 卡启动链深度解析：从上电到登录提示符</h2>
+
+  <p>本节是对前面各节涉及的"启动链"做一次<strong>完整、连贯、自底向上</strong>的深度拆解。从板子插上电源那一刻开始，到串口出现登录提示符为止，每一步发生了什么、地址是怎么传递的、谁决定谁，全部讲清楚。</p>
+
+  <div class="warn" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);">
+    <strong>阅读建议</strong>
+    <p>本节内容较长，建议配合第 11 节的 <code>sdcard.img</code> 产物一起阅读。每个小节都对应你在学习过程中问过的具体问题，不做遗漏。</p>
+  </div>
+
+  <!-- ─── 12.1 总览 ─── -->
+  <h3>12.1　启动链总览：七步接力赛</h3>
+  <p>SAMA5D27 从 SD 卡启动，整个过程像一场<strong>七棒接力赛</strong>——每一棒做完自己的事，把控制权交给下一棒：</p>
+
+  <pre style="background:#1e2e22;color:#e4f2e6;padding:16px 20px;border-radius:8px;font-size:13px;line-height:1.8;overflow-x:auto;">① Boot ROM（芯片内置，不可修改）
+   │  读 MBR → 找到 FAT 分区 → 找到 boot.bin
+   │  加载 boot.bin 到 SRAM 0x300000
+   ▼
+② boot.bin / AT91Bootstrap（14KB，跑在 SRAM）
+   │  初始化 DDR 内存
+   │  从 FAT 分区读 u-boot.bin → 写入 DDR 0x23f00000
+   │  跳转到 0x23f00000
+   ▼
+③ U-Boot（484KB，跑在 DDR）
+   │  执行 bootcmd 环境变量
+   │  fatload 读 dtb → DDR 0x21000000
+   │  fatload 读 zImage → DDR 0x22000000
+   │  bootz 跳转到内核
+   ▼
+④ Linux 内核（4.7MB，跑在 DDR）
+   │  解析 dtb（设备树），初始化硬件驱动
+   │  读 bootargs：root=/dev/mmcblk0p2
+   ▼
+⑤ 挂载根文件系统（rootfs.ext2 分区）
+   │  执行 /sbin/init
+   ▼
+⑥ 用户空间启动
+   │  登录提示符出现在串口
+   ▼
+⑦ 你可以输入命令了</pre>
+
+  <p>关键特征：<strong>每一级的地址都是上一级在编译时写死的</strong>——Boot ROM 的 SRAM 地址是芯片硬件固定的，boot.bin 的 DDR 地址是 AT91Bootstrap 编译时配置的，U-Boot 的 dtb/zImage 地址是 bootcmd 环境变量里写死的，内核的 root 设备是 bootargs 命令行参数指定的。全链路没有任何动态协商。</p>
+
+  <!-- ─── 12.2 MBR ─── -->
+  <h3>12.2　MBR：SD 卡的"目录页"</h3>
+
+  <p><strong>MBR</strong>（Master Boot Record，主引导记录）是 SD 卡的<strong>第一个扇区</strong>，也就是整张卡最开头的 512 个字节。它是整个启动链的起点——Boot ROM 上电后做的第一件事就是读这 512 个字节。</p>
+
+  <p><strong>用一本书来比喻：</strong>SD 卡就像一本厚书，MBR 就是这本书的<strong>目录页</strong>。目录页告诉你这本书分了几个章节（分区）、每个章节从第几页开始（分区起始位置）、每个章节有多长（分区大小）。</p>
+
+  <h4>MBR 的 512 字节结构</h4>
+
+  <div class="table-wrap">
+  <table>
+    <tr><th>偏移</th><th>长度</th><th>名称</th><th>内容</th></tr>
+    <tr><td>0x000</td><td>446 字节</td><td>启动代码（Boot Code）</td><td>PC 上放 BIOS 引导程序；SAMA5D27 上<strong>全为 0</strong>，因为 Boot ROM 不从这里执行代码</td></tr>
+    <tr><td>0x1BE</td><td>64 字节</td><td>分区表（Partition Table）</td><td>4 个分区表项，每个 16 字节，描述 4 个分区</td></tr>
+    <tr><td>0x1FE</td><td>2 字节</td><td>魔数（Magic Number）</td><td>固定为 <code>55 AA</code>，Boot ROM 用它判断"这是一张有效的启动卡"</td></tr>
+  </table>
+  </div>
+
+  <p><strong>为什么启动代码 446 字节全是 0？</strong></p>
+  <p>在 PC 上，BIOS 会读 MBR 的前 446 字节到内存并执行（那里放了一段引导程序）。但 SAMA5D27 的 Boot ROM <strong>不执行 MBR 里的代码</strong>——它有自己的逻辑：读 MBR 只是为了看分区表。所以这 446 字节对 SAMA5D27 来说没用，Buildroot 填 0 即可。</p>
+
+  <p><strong>为什么偏偏是 446 字节？</strong></p>
+  <p>这是历史遗产：512（扇区大小）- 64（分区表）- 2（魔数）= 446。1980 年代 IBM PC 设计 MBR 时就这么定的，后来成了标准，所有遵循 MBR 标准的设备都沿用这个布局，SAMA5D27 也不例外。</p>
+
+  <p><strong>为什么分区表是 2 个分区而不是 4 个？</strong></p>
+  <p>MBR 分区表最多能描述 4 个分区（64 字节 ÷ 16 字节/项 = 4 项），但<strong>不要求必须填满</strong>。SAMA5D27 的 sdcard.img 只需要 2 个分区（boot.vfat + rootfs.ext2），所以只用了 2 项，剩下 2 项全填 0。Boot ROM 扫到分区类型为 0x00（空）就跳过。</p>
+
+  <details>
+    <summary>📖 十六进制偏移详解：0x1BE 和 0x1FE 是怎么算出来的？（点击展开）</summary>
+    <div class="body">
+      <p>十六进制地址的计算：</p>
+      <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">偏移 0x000 = 十进制 0     → 启动代码起始
+偏移 0x1BE = 十进制 446   → 分区表起始
+  0x1BE = 1×256 + 11×16 + 14 = 256 + 176 + 14 = 446
+偏移 0x1FE = 十进制 510   → 魔数起始
+  0x1FE = 1×256 + 15×16 + 14 = 256 + 240 + 14 = 510
+偏移 0x200 = 十进制 512   → MBR 结束（下一个扇区开始）</pre>
+      <p>所以：446 + 64 + 2 = 512，刚好一个扇区。</p>
+    </div>
+  </details>
+
+  <!-- ─── 12.3 分区表 ─── -->
+  <h3>12.3　分区表 16 字节解析：如何找到 FAT 分区的物理地址</h3>
+
+  <p>分区表有 4 项，每项 16 字节。我们只看<strong>第一项</strong>（分区 1: boot.vfat）的 16 字节，这是 Boot ROM 最关心的：</p>
+
+  <div class="table-wrap">
+  <table>
+    <tr><th>字节</th><th>长度</th><th>名称</th><th>值</th><th>含义</th></tr>
+    <tr><td>B0</td><td>1</td><td>启动标志</td><td><code>0x80</code></td><td>0x80 = 可启动分区，0x00 = 不可启动</td></tr>
+    <tr><td>B1-B3</td><td>3</td><td>CHS 起始</td><td>—</td><td>磁头/柱面/扇区（老式寻址，SAMA5D27 不用）</td></tr>
+    <tr><td>B4</td><td>1</td><td>分区类型</td><td><code>0x0C</code></td><td>0x0C = FAT32 LBA / 0x06 = FAT16 / 0x83 = Linux ext4</td></tr>
+    <tr><td>B5-B7</td><td>3</td><td>CHS 结束</td><td>—</td><td>同上，不用</td></tr>
+    <tr><td>B8-B11</td><td>4</td><td>LBA 起始扇区</td><td><code>00 08 00 00</code></td><td>小端序，实际值 0x00000800 = 2048</td></tr>
+    <tr><td>B12-B15</td><td>4</td><td>扇区总数</td><td><code>00 00 00 01</code></td><td>小端序，实际值 0x01000000 = 16,777,216... 不对，见下</td></tr>
+  </table>
+  </div>
+
+  <h4>什么是小端序（Little-Endian）？</h4>
+  <p>计算机存储多字节数值时有两种顺序：</p>
+  <ul>
+    <li><strong>大端序（Big-Endian）</strong>：高位在前，像人类读数字。0x00000800 存为 <code>00 00 08 00</code></li>
+    <li><strong>小端序（Little-Endian）</strong>：低位在前，像反着读。0x00000800 存为 <code>00 08 00 00</code></li>
+  </ul>
+  <p>ARM 和 x86 都用小端序。所以分区表里 <code>00 08 00 00</code> 要反过来读：<strong>0x00000800 = 2048</strong>。</p>
+
+  <details>
+    <summary>📖 小端序怎么读？详细拆解（点击展开）</summary>
+    <div class="body">
+      <p>4 个字节 <code>00 08 00 00</code>，小端序的读法是<strong>从右往左拼</strong>：</p>
+      <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">内存中的字节：B8=00  B9=08  B10=00  B11=00
+
+小端序读取（低位在前）：
+  最低位字节 = B8  = 0x00
+  次低位字节 = B9  = 0x08
+  次高位字节 = B10 = 0x00
+  最高位字节 = B11 = 0x00
+
+拼成 32 位值：0x00_00_08_00 = 0x00000800
+
+十进制 = 8×256 = 2048</pre>
+      <p>也就是说：这个分区从第 2048 个扇区开始。</p>
+    </div>
+  </details>
+
+  <h4>从 LBA 到物理地址：分区到底在 SD 卡的哪个位置？</h4>
+  <p>LBA（Logical Block Addressing）是扇区编号，每个扇区 512 字节。Boot ROM 算物理地址的方式：</p>
+  <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">分区 1 起始 LBA = 2048
+每个扇区 = 512 字节
+
+物理字节偏移 = LBA × 512 = 2048 × 512 = 1,048,576 字节 = 1MB
+
+所以 boot.vfat 分区从 SD 卡的第 1MB 位置开始</pre>
+
+  <p><strong>为什么从 1MB 开始？</strong>前 1MB 是"留白区"：512 字节给 MBR，剩下 ~1MB 空着。这是 PC 分区的惯例（4K 对齐 + 给引导程序留空间），Buildroot 沿用了这个约定。</p>
+
+  <p><strong>Boot ROM 的完整查找流程：</strong></p>
+  <ol>
+    <li>读 SD 卡第 0 扇区（MBR），检查最后 2 字节是否 <code>55 AA</code></li>
+    <li>扫描 4 个分区表项，找<strong>启动标志 = 0x80</strong> 且 <strong>分区类型 = FAT（0x06/0x0C/0x0E）</strong>的分区</li>
+    <li>从分区表项的 B8-B11 读出 LBA 起始扇区（小端序）= 2048</li>
+    <li>跳到 SD 卡的 2048 × 512 = 1MB 位置，这里就是 FAT 分区的开头</li>
+    <li>用内置的极简 FAT 文件系统读取器，在 FAT 分区里按文件名查找 <code>boot.bin</code></li>
+    <li>找到后，把 boot.bin 的内容加载到 SRAM 地址 <code>0x300000</code></li>
+    <li>跳转到 <code>0x300000</code>，开始执行 boot.bin</li>
+  </ol>
+
+  <details>
+    <summary>📖 分区类型 0x0C 和 0x06 有什么区别？（点击展开）</summary>
+    <div class="body">
+      <p>都是 FAT 类型，区别在于是否使用 LBA 寻址：</p>
+      <ul>
+        <li><code>0x06</code> = FAT16（传统 CHS 寻址）</li>
+        <li><code>0x0E</code> = FAT16 LBA</li>
+        <li><code>0x0C</code> = FAT32 LBA</li>
+        <li><code>0x83</code> = Linux（ext2/ext3/ext4）</li>
+      </ul>
+      <p>Boot ROM 只关心"是不是 FAT 类型"，不区分 0x06/0x0C/0x0E。第二个分区（rootfs.ext2）的类型是 <code>0x83</code>（Linux），Boot ROM 会跳过它——因为 Boot ROM 只找 FAT 分区里的 boot.bin。</p>
+    </div>
+  </details>
+
+  <!-- ─── 12.4 分区内容 ─── -->
+  <h3>12.4　两个分区里分别装了什么？文件如何关联？</h3>
+
+  <p>sdcard.img 有两个分区，它们的角色完全不同：</p>
+
+  <div class="table-wrap">
+  <table>
+    <tr><th></th><th>分区 1: boot.vfat</th><th>分区 2: rootfs.ext2</th></tr>
+    <tr><td>文件系统</td><td>FAT16</td><td>ext4（镜像名 .ext2 但实际是 ext4）</td></tr>
+    <tr><td>大小</td><td>16 MB</td><td>120 MB</td></tr>
+    <tr><td>LBA 起始</td><td>2048</td><td>2048 + 32768 = 34816</td></tr>
+    <tr><td>角色</td><td>启动分区（引导文件仓库）</td><td>根文件系统（Linux 运行时的 / 目录）</td></tr>
+    <tr><td>谁读它</td><td>Boot ROM、AT91Bootstrap、U-Boot</td><td>Linux 内核</td></tr>
+  </table>
+  </div>
+
+  <p><strong>分区 1（boot.vfat）里的文件：</strong></p>
+  <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">boot.vfat/
+├── boot.bin          14 KB   ← AT91Bootstrap（第一级引导）
+├── u-boot.bin       484 KB   ← U-Boot（第二级引导）
+├── zImage            4.7 MB   ← Linux 内核镜像（压缩版）
+└── at91-sama5d27_som1_ek.dtb   34 KB   ← 设备树（硬件描述）</pre>
+
+  <p><strong>分区 2（rootfs.ext2）里的文件：</strong></p>
+  <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">rootfs.ext2/
+├── bin/       ← 基本命令（ls, cat, cp...）
+├── sbin/      ← 系统命令（init, reboot...）
+├── usr/       ← 用户程序和库
+├── lib/       ← 动态链接库（.so 文件）
+├── etc/       ← 配置文件
+├── dev/       ← 设备节点
+├── root/      ← root 用户家目录
+└── var/       ← 日志、缓存</pre>
+
+  <p><strong>文件和分区的关联逻辑：</strong></p>
+  <ul>
+    <li>分区 1 是 FAT 格式，因为 <strong>Boot ROM、AT91Bootstrap、U-Boot 都内置了 FAT 读取器</strong>，能按文件名读文件</li>
+    <li>分区 2 是 ext4 格式，因为 <strong>只有 Linux 内核有 ext4 驱动</strong>，U-Boot 不认 ext4</li>
+    <li>所以引导阶段的文件（boot.bin、u-boot.bin、zImage、dtb）必须放 FAT 分区，内核启动后才切到 ext4 分区</li>
+  </ul>
+
+  <!-- ─── 12.5 boot.bin ─── -->
+  <h3>12.5　boot.bin（AT91Bootstrap）：谁启动的？地址谁决定的？</h3>
+
+  <p>Boot ROM 把控制权交给 boot.bin 后，<strong>boot.bin 自己就开始自主运行了</strong>——它的 <code>main()</code> 函数按源代码写死的流程执行，不需要谁"启动"它或"告诉"它做什么。</p>
+
+  <p>boot.bin 干三件事：</p>
+  <ol>
+    <li><strong>初始化 DDR 控制器</strong> — 配置时钟、时序、bank 映射，让 256MB DDR3 可用</li>
+    <li><strong>从 FAT 分区读 u-boot.bin</strong> — 用内置 FAT 读取器，按文件名找到 u-boot.bin（484KB），读到 DDR</li>
+    <li><strong>跳转到 u-boot.bin 执行</strong> — 设置 PC 指针，CPU 开始跑 U-Boot</li>
+  </ol>
+
+  <h4>三个关键宏定义（编译时写死）</h4>
+  <p>DDR 地址 <code>0x23f00000</code> 不是运行时协商出来的，而是在 Buildroot 编译 AT91Bootstrap 时，通过板级头文件 <code>sama5d27_som1_ek.h</code> 里的宏定义<strong>烤进二进制</strong>的：</p>
+
+  <div class="table-wrap">
+  <table>
+    <tr><th>宏定义</th><th>值</th><th>含义</th><th>类比</th></tr>
+    <tr>
+      <td><code>CONFIG_BOOTSTRAP_MAXSIZE</code></td>
+      <td>0xC000 (48KB)</td>
+      <td>boot.bin 自身的最大体积限制。因为 SRAM 只有 128KB，boot.bin 不能太大。实际只用了 14KB</td>
+      <td>行李箱限重 48 公斤</td>
+    </tr>
+    <tr>
+      <td><code>CONFIG_LOAD_ADDR</code></td>
+      <td>0x23f00000</td>
+      <td>u-boot.bin 写入 DDR 的目标地址。boot.bin 从 SD 卡读出 u-boot.bin 后，<code>memcpy</code> 到这个地址</td>
+      <td>快递收货地址</td>
+    </tr>
+    <tr>
+      <td><code>CONFIG_JUMP_ADDR</code></td>
+      <td>0x23f00000</td>
+      <td>加载完后跳转到此地址执行。<code>PC = 这个地址</code>，CPU 开始跑 U-Boot</td>
+      <td>走到哪个房间办公</td>
+    </tr>
+  </table>
+  </div>
+
+  <p><strong>为什么 LOAD_ADDR 和 JUMP_ADDR 相同？</strong></p>
+  <p>因为 U-Boot <strong>直接加载到它将要执行的位置</strong>，不需要搬运第二次。如果两者不同，boot.bin 还要多做一次 <code>memcpy</code>，没必要。</p>
+
+  <p><strong>用 C 代码理解 boot.bin 的逻辑（简化版）：</strong></p>
+  <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">// boot.bin 的 main() 函数（简化）
+int main() {
+    // 第 1 步：初始化 DDR 控制器
+    ddr_init();
+
+    // 第 2 步：从 SD 卡 FAT 分区读 u-boot.bin
+    //   CONFIG_LOAD_ADDR = 0x23f00000 是写入目标地址
+    fat_read_file("u-boot.bin", (void *)0x23f00000);
+
+    // 第 3 步：跳转到 DDR 执行
+    //   CONFIG_JUMP_ADDR = 0x23f00000 是跳转目标
+    void (*entry)(void) = (void (*)(void))0x23f00000;
+    entry();  // PC = 0x23f00000, 开始执行 U-Boot
+
+    return 0;  // 永远不会到这里
+}</pre>
+
+  <details>
+    <summary>📖 0xC000 怎么换算成 48KB？（点击展开）</summary>
+    <div class="body">
+      <p>十六进制 0xC000 转十进制：</p>
+      <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">0xC000 = C × 16³ = 12 × 4096 = 49,152 字节
+
+49,152 ÷ 1024 = 48 KB</pre>
+      <p>快速换算表：</p>
+      <div class="table-wrap">
+      <table>
+        <tr><th>大小</th><th>字节</th><th>十六进制</th></tr>
+        <tr><td>1 KB</td><td>1,024</td><td>0x400</td></tr>
+        <tr><td>4 KB</td><td>4,096</td><td>0x1000</td></tr>
+        <tr><td>16 KB</td><td>16,384</td><td>0x4000</td></tr>
+        <tr><td>48 KB</td><td>49,152</td><td>0xC000</td></tr>
+        <tr><td>128 KB</td><td>131,072</td><td>0x20000</td></tr>
+        <tr><td>1 MB</td><td>1,048,576</td><td>0x100000</td></tr>
+      </table>
+      </div>
+      <p>规律：每乘以 16，十六进制左移一位加 0。记住 <strong>1KB = 0x400</strong>，其他都能推。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>📖 0x300000 + 128KB = 0x320000 怎么算的？（点击展开）</summary>
+    <div class="body">
+      <p>SRAM 起始地址 0x300000，大小 128KB，结束地址 = 起始 + 大小：</p>
+      <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">128 KB = 131,072 字节
+
+131,072 转十六进制 = 0x20000
+
+  0x300000    （SRAM 起始）
++ 0x020000    （128KB = 0x20000）
+----------
+  0x320000    （SRAM 结束）</pre>
+      <p>十六进制加法逢 16 进 1：<code>00000 + 20000 = 20000</code>，<code>3 + 0 = 3</code>，结果 <code>0x320000</code>。</p>
+      <p>SRAM 地址范围：<code>0x300000 ~ 0x31FFFF</code>（注意结束地址是排他的，0x320000 是"下一个地址"）。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>📖 为什么 DDR 地址是 0x23f00000？（点击展开）</summary>
+    <div class="body">
+      <p>SAMA5D27 的 DDR3 内存映射从 <code>0x20000000</code> 开始，总共 256MB，到 <code>0x30000000</code> 结束。</p>
+      <p>DDR 内存的地址分配：</p>
+      <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">0x20000000 ┬── DDR 起始
+           │
+0x21000000 ├── dtb（设备树）       ← U-Boot bootcmd 写入
+0x22000000 ├── zImage（内核）      ← U-Boot bootcmd 写入
+           │   ...
+0x23f00000 ├── u-boot.bin          ← AT91Bootstrap 写入
+           │
+0x30000000 ┴── DDR 结束（256MB）
+
+0x23f00000 - 0x20000000 = 0x03F00000 = 63 MB
+→ U-Boot 放在 DDR 的第 63MB 位置（高地址区）</pre>
+      <p>U-Boot 放在高地址，避免和后面的 dtb（0x21000000）和内核（0x22000000）冲突。</p>
+    </div>
+  </details>
+
+  <!-- ─── 12.6 U-Boot ─── -->
+  <h3>12.6　U-Boot：加载内核和设备树</h3>
+
+  <p>U-Boot 跑在 DDR 里，空间充足（256MB），功能比 boot.bin 强大得多。它执行预设的 <code>bootcmd</code> 环境变量，完成最后的引导工作。</p>
+
+  <h4>bootcmd 命令详解</h4>
+  <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">bootcmd=fatload mmc 0 0x21000000 at91-sama5d27_som1_ek.dtb; \
+       fatload mmc 0 0x22000000 zImage; \
+       bootz 0x22000000 - 0x21000000</pre>
+
+  <p>分三条命令，用分号 <code>;</code> 连接，顺序执行：</p>
+
+  <div class="table-wrap">
+  <table>
+    <tr><th>命令</th><th>含义</th><th>效果</th></tr>
+    <tr>
+      <td><code>fatload mmc 0 0x21000000 ...dtb</code></td>
+      <td>从 SD 卡（mmc 0）的 FAT 分区，读 <code>at91-sama5d27_som1_ek.dtb</code> 文件，写入 DDR 地址 0x21000000</td>
+      <td>设备树加载到 DDR</td>
+    </tr>
+    <tr>
+      <td><code>fatload mmc 0 0x22000000 zImage</code></td>
+      <td>从 SD 卡的 FAT 分区，读 <code>zImage</code> 文件，写入 DDR 地址 0x22000000</td>
+      <td>内核镜像加载到 DDR</td>
+    </tr>
+    <tr>
+      <td><code>bootz 0x22000000 - 0x21000000</code></td>
+      <td>跳转到 0x22000000 执行内核。<code>-</code> 表示没有 ramdisk，第三个参数 0x21000000 是 dtb 地址</td>
+      <td>内核开始运行</td>
+    </tr>
+  </table>
+  </div>
+
+  <details>
+    <summary>📖 bootcmd 里的地址是谁定的？（点击展开）</summary>
+    <div class="body">
+      <p>这些地址是 <strong>U-Boot 编译时</strong>通过环境变量配置写死的。在 Buildroot 编译 U-Boot 时，板级配置文件（如 <code>include/configs/at91-sama5d27_som1_ek.h</code>）里定义了默认环境变量：</p>
+      <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">#define CONFIG_BOOTCOMMAND "fatload mmc 0 0x21000000 ..."
+#define CONFIG_EXTRA_ENV_SETTINGS \
+    "loadaddr=0x22000000\0" \
+    "dtbaddr=0x21000000\0" \
+    "bootargs=console=ttyS0,115200 root=/dev/mmcblk0p2 rw"</pre>
+      <p>这些值在 <code>make</code> 编译时被嵌入 U-Boot 二进制。板子上电后，U-Boot 读取自己内部的默认环境变量来执行。</p>
+      <p>你也可以在 U-Boot 命令行里用 <code>setenv</code> 临时修改（掉电丢失），或 <code>saveenv</code> 保存到 SD 卡的 U-Boot 环境变量区域（掉电不丢）。</p>
+    </div>
+  </details>
+
+  <!-- ─── 12.7 bootargs ─── -->
+  <h3>12.7　bootargs：内核怎么知道根文件系统在哪？</h3>
+
+  <p>U-Boot 跳转到内核时，不仅传递了 dtb 地址，还传递了一个<strong>命令行参数字符串</strong> <code>bootargs</code>：</p>
+
+  <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">bootargs=console=ttyS0,115200 earlyprintk root=/dev/mmcblk0p2 rw rootwait</pre>
+
+  <p>逐个参数解释：</p>
+
+  <div class="table-wrap">
+  <table>
+    <tr><th>参数</th><th>值</th><th>含义</th></tr>
+    <tr><td><code>console</code></td><td>ttyS0,115200</td><td>内核日志输出到串口 0，波特率 115200。这就是你在串口终端看到内核启动日志的原因</td></tr>
+    <tr><td><code>earlyprintk</code></td><td>—</td><td>在串口驱动完全初始化之前就允许打印，方便调试早期启动问题</td></tr>
+    <tr><td><code>root</code></td><td>/dev/mmcblk0p2</td><td>根文件系统在哪个设备。<code>mmcblk0</code> = SD 卡，<code>p2</code> = 第 2 个分区 = rootfs.ext2</td></tr>
+    <tr><td><code>rw</code></td><td>—</td><td>以读写模式挂载根文件系统（默认是只读）</td></tr>
+    <tr><td><code>rootwait</code></td><td>—</td><td>等 SD 卡设备就绪后再挂载（SD 卡初始化可能慢，防止找不到设备）</td></tr>
+  </table>
+  </div>
+
+  <p><strong>地址传递链完整路径：</strong></p>
+  <pre style="background:#1e2e22;color:#e4f2e6;padding:16px 20px;border-radius:8px;font-size:13px;line-height:1.8;overflow-x:auto;">Boot ROM
+  └→ SRAM 0x300000（硬件固定，芯片设计时决定）
+     │
+     boot.bin (AT91Bootstrap)
+     └→ DDR 0x23f00000（编译时 CONFIG_JUMP_ADDR 写死）
+        │
+        U-Boot bootcmd
+        ├→ DDR 0x21000000 = dtb（编译时环境变量写死）
+        ├→ DDR 0x22000000 = zImage（编译时环境变量写死）
+        └→ bootargs: root=/dev/mmcblk0p2（编译时环境变量写死）
+           │
+           Linux 内核
+           └→ 挂载 /dev/mmcblk0p2 = 分区 2 = rootfs.ext2
+              └→ 执行 /sbin/init → 用户空间启动</pre>
+
+  <p><strong>每一级的地址来源：</strong></p>
+  <ul>
+    <li><strong>SRAM 0x300000</strong> → Boot ROM 硬编码（芯片设计时固化在硅片里，不可修改）</li>
+    <li><strong>DDR 0x23f00000</strong> → AT91Bootstrap 编译时 <code>CONFIG_JUMP_ADDR</code> 宏定义</li>
+    <li><strong>DDR 0x21000000 / 0x22000000</strong> → U-Boot 编译时默认环境变量</li>
+    <li><strong>/dev/mmcblk0p2</strong> → U-Boot 编译时 <code>bootargs</code> 环境变量</li>
+  </ul>
+
+  <p>全链路<strong>没有任何动态发现或协商</strong>——每个地址都是上一级在编译时写死的常量。这意味着：如果你换了不同的板子或不同的内存配置，必须重新编译对应的引导程序，修改这些地址。</p>
+
+  <!-- ─── 12.8 内存映射总结 ─── -->
+  <h3>12.8　SRAM 和 DDR 内存映射总结</h3>
+
+  <p>把整个启动链涉及的所有地址画在一张图上：</p>
+
+  <h4>SRAM（128KB，片上内存）</h4>
+  <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">0x300000 ┬── SRAM 起始（Boot ROM 硬件固定）
+         │
+         ├── boot.bin (AT91Bootstrap) 14KB
+         │   最大限制: 0xC000 = 48KB (CONFIG_BOOTSTRAP_MAXSIZE)
+         │
+0x320000 ┴── SRAM 结束 (0x300000 + 0x20000 = 0x320000)
+             128KB = 0x20000 = 131,072 字节</pre>
+
+  <h4>DDR3（256MB，外部内存）</h4>
+  <pre style="background:#1e2e22;color:#e4f2e6;padding:12px 16px;border-radius:6px;font-size:13px;">0x20000000 ┬── DDR 起始
+           │
+0x21000000 ├── dtb（设备树）34KB        ← U-Boot fatload 写入
+0x22000000 ├── zImage（内核）4.7MB      ← U-Boot fatload 写入
+           │   ...（中间空闲）
+0x23f00000 ├── u-boot.bin 484KB         ← AT91Bootstrap 写入
+           │
+0x30000000 ┴── DDR 结束 (256MB)
+           0x30000000 - 0x20000000 = 0x10000000 = 256MB</pre>
+
+  <details>
+    <summary>📖 完整启动链时间线：从上电到登录（点击展开）</summary>
+    <div class="body">
+      <div class="table-wrap">
+      <table>
+        <tr><th>阶段</th><th>耗时（大约）</th><th>发生什么</th><th>你能看到什么</th></tr>
+        <tr><td>① Boot ROM</td><td>~100ms</td><td>读 MBR，找 boot.bin，加载到 SRAM</td><td>串口可能无输出（或一行 ROM 版本号）</td></tr>
+        <tr><td>② AT91Bootstrap</td><td>~50ms</td><td>初始化 DDR，加载 u-boot.bin</td><td>串口可能输出 "AT91Bootstrap" 版本信息</td></tr>
+        <tr><td>③ U-Boot</td><td>~500ms</td><td>执行 bootcmd，加载 dtb + zImage</td><td>串口输出 U-Boot 版本、环境变量、加载日志</td></tr>
+        <tr><td>④ 内核启动</td><td>~3-5s</td><td>解压内核、初始化驱动、挂载 rootfs</td><td>大量内核日志（dmesg）刷屏</td></tr>
+        <tr><td>⑤ 用户空间</td><td>~1s</td><td>执行 init，启动服务</td><td>登录提示符 <code>sama5d27 login:</code></td></tr>
+      </table>
+      </div>
+      <p>总计：上电到登录约 5-8 秒。其中内核启动阶段最慢（驱动初始化）。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>📖 如果某一环出错了会怎样？（点击展开）</summary>
+    <div class="body">
+      <div class="table-wrap">
+      <table>
+        <tr><th>出错的环节</th><th>症状</th><th>排查方法</th></tr>
+        <tr><td>MBR 无效（无 55AA）</td><td>Boot ROM 报错或无输出</td><td>检查 sdcard.img 是否完整烧录</td></tr>
+        <tr><td>FAT 分区里没有 boot.bin</td><td>Boot ROM 卡住或报 "boot.bin not found"</td><td>检查分区 1 内容</td></tr>
+        <tr><td>boot.bin 太大（超 48KB）</td><td>SRAM 溢出，随机崩溃</td><td>检查 AT91Bootstrap 编译日志</td></tr>
+        <tr><td>DDR 初始化失败</td><td>AT91Bootstrap 卡在 DDR init</td><td>检查 DDR 配置参数</td></tr>
+        <tr><td>FAT 分区里没有 u-boot.bin</td><td>AT91Bootstrap 报错</td><td>检查分区 1 内容</td></tr>
+        <tr><td>bootcmd 里文件名错误</td><td>U-Boot 报 "file not found"</td><td>检查 bootcmd 和实际文件名</td></tr>
+        <tr><td>root=/dev/mmcblk0p2 不存在</td><td>内核 panic: VFS: Unable to mount root fs</td><td>检查分区 2 是否正确，rootfs 是否完整</td></tr>
+        <tr><td>rootfs 里没有 /sbin/init</td><td>内核 panic: No init found</td><td>检查 rootfs 内容</td></tr>
+      </table>
+      </div>
+    </div>
+  </details>
+
+  <p style="margin-top:24px;padding:16px 20px;background:rgba(220,240,228,0.5);border-radius:8px;border-left:4px solid var(--green);">
+    <strong>本节总结</strong>：SD 卡启动链是一个<strong>七级接力</strong>过程，每一级都在编译时把下一级的地址写死。MBR 只负责"指路"（告诉 Boot ROM FAT 分区在哪），之后是 Boot ROM → boot.bin → U-Boot → 内核 → rootfs 的逐级加载。理解了这个链条，你就理解了嵌入式 Linux 启动的核心原理。
+  </p>
+
+</section>
+
+<!-- ==================== 13. FAQ ==================== -->
 <section id="faq">
-  <h2 class="step"><span class="num">12</span>常见问题 FAQ（实战踩坑记录）</h2>
+  <h2 class="step"><span class="num">13</span>常见问题 FAQ（实战踩坑记录）</h2>
 
   <details>
     <summary>make 报错：CROSS_COMPILE environment variable must be defined</summary>
@@ -1432,9 +1919,9 @@ tail -f /root/build.log</pre>
   </details>
 </section>
 
-<!-- ==================== 13. 附录 ==================== -->
+<!-- ==================== 14. 附录 ==================== -->
 <section id="appendix">
-  <h2 class="step"><span class="num">13</span>附录：Mac 与容器的目录关系</h2>
+  <h2 class="step"><span class="num">14</span>附录：Mac 与容器的目录关系</h2>
 
   <p>新手最容易混淆的一点——<strong>两个系统各有各的家目录</strong>：</p>
 
