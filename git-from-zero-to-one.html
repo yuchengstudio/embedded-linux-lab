@@ -1105,6 +1105,374 @@ cp ~/WorkBuddy/2026-07-27-22-40-48/sama5d27-docker-guide.html ~/sama5/sama5d27-d
       <p>这 6 步只需要做一次。以后每次改完文件，只需要 cp + add + commit + push 四步。</p>
     </div>
   </details>
+
+  <hr style="margin:36px 0;border:none;border-top:1px solid rgba(0,0,0,0.08)">
+
+  <h3 style="color:#1b4332;margin:0 0 8px;">深入：推送完整流程详解（7 层拆解）</h3>
+  <p style="color:#555;margin:0 0 20px;">上面的 4 步是简化版。下面把每一步拆开，用你实际的推送数据（<code>bc1af84..e15612d</code>）逐层讲透，从文件位置到 SSH 认证到终端输出，一层一层来。</p>
+
+  <!-- ===== 7层总览 SVG ===== -->
+  <div class="svg-box">
+    <div class="svg-title">推送完整流程：7 层总览</div>
+    <svg viewBox="0 0 680 1010" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .lt { font-family:-apple-system,sans-serif; font-size:14px; font-weight:600; fill:#1b4332; }
+        .ls { font-family:-apple-system,sans-serif; font-size:12px; fill:#555; }
+        .lm { font-family:"SF Mono",monospace; font-size:11px; fill:#444; }
+        .ln { font-family:-apple-system,sans-serif; font-size:13px; font-weight:600; fill:#fff; }
+        .lr { font-family:-apple-system,sans-serif; font-size:11px; fill:#666; }
+      </style>
+
+      <!-- ===== Layer 1: 两个文件位置 ===== -->
+      <rect x="20" y="10" width="640" height="110" rx="10" fill="#d4f0dd" stroke="#52b788" stroke-width="1"/>
+      <circle cx="48" cy="38" r="16" fill="#2d6a4f"/>
+      <text class="ln" x="48" y="38" text-anchor="middle" dominant-baseline="central">1</text>
+      <text class="lt" x="76" y="34">两个文件的位置</text>
+      <text class="ls" x="76" y="52">主文件在 WorkBuddy 目录，仓库副本在 ~/sama5/ 目录，Git 只认仓库目录里的文件</text>
+      <!-- 主文件 -->
+      <rect x="40" y="66" width="250" height="42" rx="6" fill="#fff" stroke="#95d5b2" stroke-width="1"/>
+      <text class="lm" x="52" y="82">主文件（我帮你改的）</text>
+      <text class="lr" x="52" y="98">~/WorkBuddy/.../guide.html</text>
+      <!-- 箭头 -->
+      <line x1="295" y1="87" x2="370" y2="87" stroke="#52b788" stroke-width="1.5" marker-end="url(#arrG)"/>
+      <text class="lm" x="305" y="80" fill="#2d6a4f">cp 复制</text>
+      <!-- 仓库副本 -->
+      <rect x="375" y="66" width="265" height="42" rx="6" fill="#fff" stroke="#95d5b2" stroke-width="1"/>
+      <text class="lm" x="387" y="82">仓库副本（Git 认的）</text>
+      <text class="lr" x="387" y="98">~/sama5/sama5d27-docker-guide/</text>
+      <defs>
+        <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="#52b788" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+
+      <!-- 连接线 1→2 -->
+      <line x1="340" y1="120" x2="340" y2="138" stroke="#bbb" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- ===== Layer 2: git add -A ===== -->
+      <rect x="20" y="140" width="640" height="120" rx="10" fill="#d4f0dd" stroke="#52b788" stroke-width="1"/>
+      <circle cx="48" cy="168" r="16" fill="#2d6a4f"/>
+      <text class="ln" x="48" y="168" text-anchor="middle" dominant-baseline="central">2</text>
+      <text class="lt" x="76" y="164">git add -A：标记所有变化</text>
+      <text class="ls" x="76" y="182">Git 扫一遍仓库目录，发现哪些文件变了（修改/新增/删除），全部打上标记</text>
+      <!-- 三种变化 -->
+      <rect x="40" y="196" width="185" height="50" rx="6" fill="#fff" stroke="#95d5b2"/>
+      <text class="lm" x="52" y="214">修改 (Modified)</text>
+      <text class="lr" x="52" y="232">sama5d27-docker-guide.html</text>
+      <rect x="240" y="196" width="185" height="50" rx="6" fill="#fff" stroke="#95d5b2"/>
+      <text class="lm" x="252" y="214">新增 (Added)</text>
+      <text class="lr" x="252" y="232">notes.txt（如果有）</text>
+      <rect x="440" y="196" width="195" height="50" rx="6" fill="#fff" stroke="#95d5b2"/>
+      <text class="lm" x="452" y="214">删除 (Deleted)</text>
+      <text class="lr" x="452" y="232">old-version.html（如果有）</text>
+      <text class="ls" x="40" y="265" fill="#2d6a4f">-A = --all，三种变化全标记，一条命令搞定</text>
+
+      <!-- 连接线 2→3 -->
+      <line x1="340" y1="260" x2="340" y2="278" stroke="#bbb" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- ===== Layer 3: git commit ===== -->
+      <rect x="20" y="280" width="640" height="130" rx="10" fill="#d4f0dd" stroke="#52b788" stroke-width="1"/>
+      <circle cx="48" cy="308" r="16" fill="#2d6a4f"/>
+      <text class="ln" x="48" y="308" text-anchor="middle" dominant-baseline="central">3</text>
+      <text class="lt" x="76" y="304">git commit -m "说明"：拍一张快照</text>
+      <text class="ls" x="76" y="322">Git 把当前文件状态拍一张"照片"存起来，生成唯一 ID，写上说明</text>
+      <!-- 历史链 -->
+      <rect x="40" y="338" width="120" height="36" rx="6" fill="#fff" stroke="#95d5b2"/>
+      <text class="lm" x="52" y="354">e1d6798</text>
+      <text class="lr" x="52" y="368">第一版</text>
+      <text class="lr" x="168" y="356">→</text>
+      <rect x="185" y="338" width="120" height="36" rx="6" fill="#fff" stroke="#95d5b2"/>
+      <text class="lm" x="197" y="354">25831de</text>
+      <text class="lr" x="197" y="368">加 FAQ</text>
+      <text class="lr" x="313" y="356">→</text>
+      <rect x="330" y="338" width="120" height="36" rx="6" fill="#fff" stroke="#95d5b2"/>
+      <text class="lm" x="342" y="354">9f1ac95</text>
+      <text class="lr" x="342" y="368">O= 方案</text>
+      <text class="lr" x="458" y="356">→</text>
+      <rect x="475" y="338" width="160" height="36" rx="6" fill="#2d6a4f" stroke="#2d6a4f"/>
+      <text class="lm" x="487" y="354" fill="#fff">e15612d</text>
+      <text class="lr" x="487" y="368" fill="#b7e4c7">nohup 拆解（最新）</text>
+      <text class="ls" x="40" y="395" fill="#2d6a4f">每张快照有唯一 ID（哈希值），内容变一个字 ID 就完全不同，旧快照不删形成历史链</text>
+
+      <!-- 连接线 3→4 -->
+      <line x1="340" y1="410" x2="340" y2="428" stroke="#bbb" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- ===== Layer 4: git push ===== -->
+      <rect x="20" y="430" width="640" height="120" rx="10" fill="#d6e8ff" stroke="#4a90d9" stroke-width="1"/>
+      <circle cx="48" cy="458" r="16" fill="#1a5276"/>
+      <text class="ln" x="48" y="458" text-anchor="middle" dominant-baseline="central">4</text>
+      <text class="lt" x="76" y="454" fill="#1a5276">git push -u origin main：推送到 GitHub</text>
+      <text class="ls" x="76" y="472">把 commit 打包，通过 SSH 加密通道传输到 GitHub</text>
+      <!-- 三个子步骤 -->
+      <rect x="40" y="488" width="180" height="48" rx="6" fill="#fff" stroke="#aed6f1"/>
+      <text class="lm" x="52" y="506">① 打包 commit</text>
+      <text class="lr" x="52" y="524">压缩成 git 对象</text>
+      <text class="lr" x="225" y="512">→</text>
+      <rect x="245" y="488" width="180" height="48" rx="6" fill="#fff" stroke="#aed6f1"/>
+      <text class="lm" x="257" y="506">② SSH 加密传输</text>
+      <text class="lr" x="257" y="524">27KB 差异块</text>
+      <text class="lr" x="430" y="512">→</text>
+      <rect x="450" y="488" width="185" height="48" rx="6" fill="#fff" stroke="#aed6f1"/>
+      <text class="lm" x="462" y="506">③ GitHub 写入</text>
+      <text class="lr" x="462" y="524">还原差异→更新 main</text>
+
+      <!-- 连接线 4→5 -->
+      <line x1="340" y1="550" x2="340" y2="568" stroke="#bbb" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- ===== Layer 5: SSH 认证 ===== -->
+      <rect x="20" y="570" width="640" height="130" rx="10" fill="#d6e8ff" stroke="#4a90d9" stroke-width="1"/>
+      <circle cx="48" cy="598" r="16" fill="#1a5276"/>
+      <text class="ln" x="48" y="598" text-anchor="middle" dominant-baseline="central">5</text>
+      <text class="lt" x="76" y="594" fill="#1a5276">SSH 认证：公钥私钥验证身份</text>
+      <text class="ls" x="76" y="612">每次 push，GitHub 发随机挑战，你用私钥签名，GitHub 用公钥验证</text>
+      <!-- 6步流程简化 -->
+      <rect x="40" y="628" width="180" height="58" rx="6" fill="#fff" stroke="#aed6f1"/>
+      <text class="lm" x="52" y="646">Mac 私钥签名</text>
+      <text class="lr" x="52" y="662">~/.ssh/id_ed25519</text>
+      <text class="lr" x="52" y="678">私钥不出 Mac</text>
+      <text class="lr" x="225" y="657">→</text>
+      <rect x="245" y="628" width="180" height="58" rx="6" fill="#fff" stroke="#aed6f1"/>
+      <text class="lm" x="257" y="646">网络传输</text>
+      <text class="lr" x="257" y="662">只传签名结果</text>
+      <text class="lr" x="257" y="678">不传私钥本身</text>
+      <text class="lr" x="430" y="657">→</text>
+      <rect x="450" y="628" width="185" height="58" rx="6" fill="#fff" stroke="#aed6f1"/>
+      <text class="lm" x="462" y="646">GitHub 公钥验证</text>
+      <text class="lr" x="462" y="662">id_ed25519.pub</text>
+      <text class="lr" x="462" y="678">通过=确认是你</text>
+
+      <!-- 连接线 5→6 -->
+      <line x1="340" y1="700" x2="340" y2="718" stroke="#bbb" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- ===== Layer 6: 终端输出 ===== -->
+      <rect x="20" y="720" width="640" height="170" rx="10" fill="#eceef0" stroke="#888" stroke-width="1"/>
+      <circle cx="48" cy="748" r="16" fill="#444"/>
+      <text class="ln" x="48" y="748" text-anchor="middle" dominant-baseline="central">6</text>
+      <text class="lt" x="76" y="744" fill="#333">终端输出逐行解读</text>
+      <text class="ls" x="76" y="762">push 时终端打印的每一行都代表一个步骤</text>
+      <!-- 终端模拟 -->
+      <rect x="40" y="778" width="600" height="100" rx="6" fill="#1e1e1e"/>
+      <text class="lm" x="52" y="796" fill="#9cdcfe">Enumerating objects: 14, done.</text>
+      <text class="lr" x="300" y="796" fill="#888">← 数变化（14 个对象）</text>
+      <text class="lm" x="52" y="814" fill="#9cdcfe">Delta compression using up to 8 threads</text>
+      <text class="lr" x="300" y="814" fill="#888">← 差分压缩（8 核并行）</text>
+      <text class="lm" x="52" y="832" fill="#9cdcfe">Resolving deltas: 100% (7/7)</text>
+      <text class="lr" x="300" y="832" fill="#888">← GitHub 还原 7 个差异块</text>
+      <text class="lm" x="52" y="850" fill="#9cdcfe">bc1af84..e15612d  main -> main</text>
+      <text class="lr" x="300" y="850" fill="#888">← 版本更新，推送成功</text>
+
+      <!-- 连接线 6→7 -->
+      <line x1="340" y1="890" x2="340" y2="908" stroke="#bbb" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- ===== Layer 7: 首次准备 ===== -->
+      <rect x="20" y="910" width="640" height="88" rx="10" fill="#eceef0" stroke="#888" stroke-width="1"/>
+      <circle cx="48" cy="938" r="16" fill="#444"/>
+      <text class="ln" x="48" y="938" text-anchor="middle" dominant-baseline="central">7</text>
+      <text class="lt" x="76" y="934" fill="#333">首次准备（只做一次，已完成）</text>
+      <text class="ls" x="76" y="952">这三步已经做完了，以后每次只需要 cp → add → commit → push 四步</text>
+      <rect x="40" y="964" width="185" height="26" rx="5" fill="#fff" stroke="#ccc"/>
+      <text class="lm" x="52" y="981">git init（开账本）</text>
+      <rect x="240" y="964" width="195" height="26" rx="5" fill="#fff" stroke="#ccc"/>
+      <text class="lm" x="252" y="981">git remote add（绑地址）</text>
+      <rect x="450" y="964" width="185" height="26" rx="5" fill="#fff" stroke="#ccc"/>
+      <text class="lm" x="462" y="981">gh auth login（SSH 登录）</text>
+    </svg>
+  </div>
+
+  <!-- ===== 逐层文字详解 ===== -->
+  <div class="cmd-explain" style="margin-top:20px;border-left:3px solid #4a9d6a;padding-left:16px;">
+
+    <h4 style="margin:0 0 6px;color:#1b4332;">① 两个文件的位置</h4>
+    <p style="margin:0 0 14px;color:#555;font-size:14px;">你的 HTML 有两份：主文件在 <code>~/WorkBuddy/.../sama5d27-docker-guide.html</code>（我帮你改的就是这个），仓库副本在 <code>~/sama5/sama5d27-docker-guide/</code>（用来推 GitHub 的）。Git 只认自己仓库目录里的文件，所以第一步必须 <code>cp</code> 把主文件搬过去覆盖旧的。搬完之后 Git 还认不出来你改了什么——它只是在硬盘上多了一个新版的文件。</p>
+
+    <h4 style="margin:0 0 6px;color:#1b4332;">② git add -A：标记所有变化</h4>
+    <p style="margin:0 0 14px;color:#555;font-size:14px;">文件从"工作区"进入"暂存区"。Git 扫一遍仓库目录，发现哪些文件变了（修改、新增、删除三种），全部打上标记。<code>-A</code> = <code>--all</code>，意思是"别让我一条条指定了，你自己扫一遍，所有变的都给我标记上"。</p>
+    <p style="margin:0 0 14px;color:#555;font-size:14px;"><strong>add 不改文件内容</strong>，只是给 Git 打个标记："这个文件变了，待会 commit 时记上"。打完标记后 Git 知道你改了，但还没有正式记录。</p>
+
+    <h4 style="margin:0 0 6px;color:#1b4332;">③ git commit -m "说明"：拍一张快照</h4>
+    <p style="margin:0 0 14px;color:#555;font-size:14px;">Git 做三件事：① 把暂存区里标记的文件"拍一张快照"存到本地仓库 ② 生成唯一 ID（如 <code>e15612d</code>）③ 写上你指定的说明文字。</p>
+    <p style="margin:0 0 14px;color:#555;font-size:14px;">快照 ID 是 Git 根据文件内容用哈希算法算出来的——内容变一个字，ID 就完全不同。旧快照不删，形成历史链：<code>e1d6798 → 25831de → 9f1ac95 → e15612d</code>。此时本地有新版了，但 GitHub 上还没有。</p>
+
+    <h4 style="margin:0 0 6px;color:#1b4332;">④ git push -u origin main：推送到 GitHub</h4>
+    <p style="margin:0 0 14px;color:#555;font-size:14px;">分三个子步骤：① 把 commit 打包压缩成 Git 对象 ② 通过 SSH 加密通道传输 ③ GitHub 收到后写入远程仓库。</p>
+    <p style="margin:0 0 14px;color:#555;font-size:14px;"><code>origin</code> 是远程仓库地址的别名 = <code>git@github.com:yuchengstudio/embedded-linux-lab.git</code>。<code>main</code> 是你本地那条时间线的名字。<code>-u</code> 表示记住"以后 push 默认推到 origin 的 main"，下次只打 <code>git push</code> 就行。</p>
+
+    <h4 style="margin:0 0 6px;color:#1b4332;">⑤ SSH 认证：公钥私钥验证身份</h4>
+    <p style="margin:0 0 14px;color:#555;font-size:14px;">每次 push，GitHub 不是直接接收文件，而是先验证你的身份。过程：① GitHub 生成一段随机字符串（挑战）发给你的 Mac ② Mac 读取私钥 <code>~/.ssh/id_ed25519</code>，对挑战字符串做签名运算 ③ 只把签名结果发给 GitHub，<strong>私钥本身不出 Mac</strong> ④ GitHub 用你之前上传的公钥验证签名，通过 = 确认是你。</p>
+    <p style="margin:0 0 14px;color:#555;font-size:14px;">用印章打比方：GitHub 每次给你发一张白纸（随机挑战），你用私人印章盖一下（私钥签名）发回去，GitHub 用验印章的模具（公钥）对一下印记，对上了就确认是你。印章全程在你手里，别人偷不到。</p>
+
+    <h4 style="margin:0 0 6px;color:#1b4332;">⑥ 终端输出逐行解读</h4>
+    <p style="margin:0 0 6px;color:#555;font-size:14px;">push 时终端打印的每一行都代表一个步骤：</p>
+    <ul style="margin:0 0 14px;color:#555;font-size:14px;line-height:1.8;">
+      <li><code>Enumerating objects: 14</code> — 数变化，发现有 14 个 Git 对象要传</li>
+      <li><code>Delta compression using up to 8 threads</code> — 差分压缩，8 个 CPU 核并行压缩</li>
+      <li><code>Resolving deltas: 100% (7/7)</code> — GitHub 收到后还原 7 个差异块，拼出完整新文件</li>
+      <li><code>bc1af84..e15612d</code> — GitHub 上的版本从旧的 <code>bc1af84</code> 更新到新的 <code>e15612d</code></li>
+      <li><code>main -> main</code> — 从本地 main 分支推到 GitHub 的 main 分支</li>
+    </ul>
+
+    <h4 style="margin:0 0 6px;color:#1b4332;">⑦ 首次准备（只做一次）</h4>
+    <p style="margin:0 0 0;color:#555;font-size:14px;"><code>git init</code>（给文件夹开账本）→ <code>git remote add origin</code>（关联 GitHub 仓库地址）→ <code>gh auth login -w</code>（SSH 登录，上传公钥）。这三步已经做完了，以后每次改完 HTML 只需要走 ① 到 ④ 四步就行。</p>
+
+  </div>
+
+  <!-- ===== 实际例子 ===== -->
+  <hr style="margin:32px 0;border:none;border-top:1px solid rgba(0,0,0,0.08)">
+
+  <h3 style="color:#1b4332;margin:0 0 8px;">实际例子：一次完整的推送</h3>
+  <p style="color:#555;margin:0 0 16px;">用你实际推送的数据，把整个流程走一遍：</p>
+
+  <div class="svg-box">
+    <div class="svg-title">实际推送例子：bc1af84 → e15612d</div>
+    <svg viewBox="0 0 680 780" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .et { font-family:-apple-system,sans-serif; font-size:14px; font-weight:600; fill:#1b4332; }
+        .es { font-family:-apple-system,sans-serif; font-size:12px; fill:#555; }
+        .em { font-family:"SF Mono",monospace; font-size:11px; fill:#444; }
+        .en { font-family:-apple-system,sans-serif; font-size:13px; font-weight:600; fill:#fff; }
+        .er { font-family:-apple-system,sans-serif; font-size:11px; fill:#666; }
+        .ec { font-family:"SF Mono",monospace; font-size:11px; fill:#9cdcfe; }
+      </style>
+
+      <!-- Step 1: cp -->
+      <rect x="20" y="10" width="640" height="120" rx="10" fill="#d4f0dd" stroke="#52b788" stroke-width="1"/>
+      <circle cx="48" cy="38" r="16" fill="#2d6a4f"/>
+      <text class="en" x="48" y="38" text-anchor="middle" dominant-baseline="central">1</text>
+      <text class="et" x="76" y="34">cp：复制主文件到仓库目录</text>
+      <text class="es" x="76" y="52">我帮你把 HTML 里 nohup 讲解扩充了，要先把新版本搬到仓库目录</text>
+      <rect x="40" y="66" width="600" height="26" rx="5" fill="#1e1e1e"/>
+      <text class="ec" x="52" y="84">cp ~/WorkBuddy/.../sama5d27-docker-guide.html ~/sama5/sama5d27-docker-guide/</text>
+      <text class="es" x="40" y="108">搬完之后：硬盘上有了新版文件，但 Git 还认不出来你改了什么</text>
+
+      <line x1="340" y1="130" x2="340" y2="148" stroke="#bbb" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- Step 2: git add -->
+      <rect x="20" y="150" width="640" height="120" rx="10" fill="#d4f0dd" stroke="#52b788" stroke-width="1"/>
+      <circle cx="48" cy="178" r="16" fill="#2d6a4f"/>
+      <text class="en" x="48" y="178" text-anchor="middle" dominant-baseline="central">2</text>
+      <text class="et" x="76" y="174">git add -A：Git 扫描并标记变化</text>
+      <text class="es" x="76" y="192">Git 扫一遍仓库目录，发现 HTML 被修改了，打个标记</text>
+      <rect x="40" y="206" width="600" height="26" rx="5" fill="#1e1e1e"/>
+      <text class="ec" x="52" y="224">cd ~/sama5/sama5d27-docker-guide && git add -A</text>
+      <text class="es" x="40" y="248">打完标记后：Git 知道你改了 HTML，但还没有正式记录</text>
+
+      <line x1="340" y1="270" x2="340" y2="288" stroke="#bbb" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- Step 3: git commit -->
+      <rect x="20" y="290" width="640" height="160" rx="10" fill="#d4f0dd" stroke="#52b788" stroke-width="1"/>
+      <circle cx="48" cy="318" r="16" fill="#2d6a4f"/>
+      <text class="en" x="48" y="318" text-anchor="middle" dominant-baseline="central">3</text>
+      <text class="et" x="76" y="314">git commit -m "说明"：拍快照</text>
+      <text class="es" x="76" y="332">Git 做三件事：拍快照 → 生成 ID e15612d → 写上说明</text>
+      <rect x="40" y="346" width="600" height="26" rx="5" fill="#1e1e1e"/>
+      <text class="ec" x="52" y="364">git commit -m "扩充 nohup 命令拆解表"</text>
+      <!-- 快照信息 -->
+      <text class="es" x="40" y="392">快照内容：</text>
+      <text class="er" x="120" y="392">ID: e15612d  |  改了 index.html  |  +134 行 -1 行  |  说明: "扩充 nohup 命令拆解表"</text>
+      <text class="es" x="40" y="412">历史链：</text>
+      <text class="er" x="120" y="412">bc1af84 → e1d6798 → 25831de → 9f1ac95 → </text>
+      <text class="er" x="425" y="412" fill="#2d6a4f" font-weight="bold">e15612d（本次）</text>
+      <text class="es" x="40" y="432">本地有了新版，但 GitHub 上还是旧的 bc1af84</text>
+
+      <line x1="340" y1="450" x2="340" y2="468" stroke="#bbb" stroke-width="1" stroke-dasharray="3 2"/>
+
+      <!-- Step 4: git push -->
+      <rect x="20" y="470" width="640" height="290" rx="10" fill="#d6e8ff" stroke="#4a90d9" stroke-width="1"/>
+      <circle cx="48" cy="498" r="16" fill="#1a5276"/>
+      <text class="en" x="48" y="498" text-anchor="middle" dominant-baseline="central">4</text>
+      <text class="et" x="76" y="494" fill="#1a5276">git push：通过 SSH 推送到 GitHub</text>
+      <text class="es" x="76" y="512">把 e15612d 打包，通过 SSH 加密通道传到 GitHub</text>
+      <rect x="40" y="526" width="600" height="26" rx="5" fill="#1e1e1e"/>
+      <text class="ec" x="52" y="544">git push</text>
+
+      <!-- 终端输出 -->
+      <text class="es" x="40" y="572" fill="#1a5276">终端输出逐行翻译：</text>
+      <rect x="40" y="580" width="600" height="170" rx="6" fill="#1e1e1e"/>
+      <text class="ec" x="52" y="598">Enumerating objects: 14, done.</text>
+      <text class="er" x="320" y="598" fill="#888">数变化：14 个对象</text>
+      <text class="ec" x="52" y="618">Counting objects: 100% (14/14), done.</text>
+      <text class="er" x="320" y="618" fill="#888">数完了</text>
+      <text class="ec" x="52" y="638">Delta compression using up to 8 threads</text>
+      <text class="er" x="320" y="638" fill="#888">差分压缩：8 核并行</text>
+      <text class="ec" x="52" y="658">Compressing objects: 100% (13/13), done.</text>
+      <text class="er" x="320" y="658" fill="#888">压缩完了</text>
+      <text class="ec" x="52" y="678">Writing objects: 100% (13/13), 27.00 KiB</text>
+      <text class="er" x="320" y="678" fill="#888">写入 27KB 数据</text>
+      <text class="ec" x="52" y="698">Resolving deltas: 100% (7/7)</text>
+      <text class="er" x="320" y="698" fill="#888">GitHub 还原 7 个差异块</text>
+      <text class="ec" x="52" y="718">bc1af84..e15612d  main -> main</text>
+      <text class="er" x="320" y="718" fill="#888">版本更新，推送成功</text>
+      <text class="ec" x="52" y="738">branch 'main' set up to track 'origin/main'.</text>
+      <text class="er" x="320" y="738" fill="#888">-u 生效，以后默认推这</text>
+    </svg>
+  </div>
+
+  <!-- ===== Resolving deltas 详细解释 ===== -->
+  <details style="margin-top:20px;">
+    <summary style="cursor:pointer;font-size:15px;font-weight:600;color:#1b4332;padding:12px 16px;background:#e8f5e9;border-radius:8px;border:1px solid #95d5b2;">深入理解：Resolving deltas（还原差异）是什么意思？</summary>
+    <div style="padding:16px;background:#f8fdf9;border-radius:8px;margin-top:8px;border:1px solid #d4e9d4;">
+
+      <p style="color:#555;font-size:14px;margin:0 0 12px;">Git 传文件<strong>不是整个传</strong>，而是只传"改了哪些行"（叫 delta，差异）。具体到你的例子：</p>
+
+      <p style="color:#555;font-size:14px;margin:0 0 8px;"><strong>你本地的变化（旧版 → 新版）：</strong></p>
+      <div style="background:#1e1e1e;border-radius:6px;padding:12px 16px;margin:0 0 12px;font-family:'SF Mono',monospace;font-size:12px;line-height:1.8;">
+        <span style="color:#f48771;">- 输出全写进 build.log。</span><span style="color:#888;">  ← 旧版第 1030 行，删掉</span><br>
+        <span style="color:#b5cea8;">+ 。下面逐个拆开讲：</span><span style="color:#888;">  ← 新版，加这行</span><br>
+        <span style="color:#b5cea8;">+ &lt;details&gt; 命令拆解 7 零件</span><span style="color:#888;">  ← 加这行</span><br>
+        <span style="color:#b5cea8;">+ &lt;table&gt; nohup: 别挂断</span><span style="color:#888;">  ← 加这行</span><br>
+        <span style="color:#b5cea8;">+ &lt;table&gt; make: 编译总开关</span><span style="color:#888;">  ← 加这行</span><br>
+        <span style="color:#888;">...（一共加 134 行）</span>
+      </div>
+
+      <p style="color:#555;font-size:14px;margin:0 0 8px;"><strong>传输过程：</strong></p>
+      <ol style="color:#555;font-size:14px;line-height:1.8;margin:0 0 12px;padding-left:20px;">
+        <li>你本地：从 <code>9f1ac95</code> 到 <code>e15612d</code>，改了 134 行，Git 把这些变化打包成 7 个"差异块"（delta）</li>
+        <li>传输：只传这 7 个差异块过去（27KB），<strong>不传整个文件</strong></li>
+        <li>GitHub 收到后：手里有旧版，收到 7 个差异块后，逐个"拼"到旧版上 → 还原出 <code>e15612d</code>（新版）</li>
+      </ol>
+
+      <p style="color:#555;font-size:14px;margin:0 0 8px;"><strong>为什么不直接传整个文件？</strong></p>
+      <p style="color:#555;font-size:14px;margin:0;">旧文件 1500 行，你只改了 134 行。传整个文件 = 传 1500 行；传 delta = 只传 134 行。省了 90% 的传输量，所以只用了 27KB 就推完了。</p>
+
+      <p style="color:#555;font-size:14px;margin:12px 0 0;"><strong>打个比方：</strong>你有一本 1500 页的书（旧版），老师给你一张纸写着"第 1030 页第 5 行删掉，后面加 134 行新内容"。你不需要重新买一本 1500 页的新书，只要翻开那一页改一改就行。这个"改"的动作就是 Resolving deltas。</p>
+
+    </div>
+  </details>
+
+  <!-- ===== commit ID 详解 ===== -->
+  <details style="margin-top:16px;">
+    <summary style="cursor:pointer;font-size:15px;font-weight:600;color:#1b4332;padding:12px 16px;background:#e8f5e9;border-radius:8px;border:1px solid #95d5b2;">深入理解：commit ID（e15612d）到底是什么？</summary>
+    <div style="padding:16px;background:#f8fdf9;border-radius:8px;margin-top:8px;border:1px solid #d4e9d4;">
+      <table style="width:100%;border-collapse:collapse;font-size:14px;color:#555;">
+        <tr style="border-bottom:1px solid #d4e9d4;">
+          <td style="padding:6px 12px;font-weight:600;color:#333;">完整 ID</td>
+          <td style="padding:6px 12px;font-family:monospace;">e15612d2e502bf8a72b437d770b84e6deb44e79a</td>
+        </tr>
+        <tr style="border-bottom:1px solid #d4e9d4;">
+          <td style="padding:6px 12px;font-weight:600;color:#333;">短 ID</td>
+          <td style="padding:6px 12px;font-family:monospace;">e15612d（完整 ID 的前 7 位，够用不会重复）</td>
+        </tr>
+        <tr style="border-bottom:1px solid #d4e9d4;">
+          <td style="padding:6px 12px;font-weight:600;color:#333;">作者</td>
+          <td style="padding:6px 12px;">alan &lt;yucheng_studio@163.com&gt;</td>
+        </tr>
+        <tr style="border-bottom:1px solid #d4e9d4;">
+          <td style="padding:6px 12px;font-weight:600;color:#333;">时间</td>
+          <td style="padding:6px 12px;">2026-08-15 22:05:34</td>
+        </tr>
+        <tr style="border-bottom:1px solid #d4e9d4;">
+          <td style="padding:6px 12px;font-weight:600;color:#333;">说明</td>
+          <td style="padding:6px 12px;">完善 nohup 命令拆解、重定向大白话讲解、1&gt; 简写说明、折叠7零件表格</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 12px;font-weight:600;color:#333;">文件变化</td>
+          <td style="padding:6px 12px;">index.html（+134 行 -1 行）</td>
+        </tr>
+      </table>
+      <p style="color:#555;font-size:14px;margin:12px 0 0;"><strong>ID 怎么来的？</strong>Git 根据文件内容用哈希算法（SHA-1）算出来的。内容只要有一个字不一样，ID 就完全不同。这就是为什么 Git 能精确追踪每一次改动——每张"照片"的编号都是唯一的。</p>
+    </div>
+  </details>
+
 </section>
 
 <!-- ==================== 13. FAQ ==================== -->
