@@ -1446,7 +1446,7 @@ screen /dev/tty.usbmodem* 115200</pre>
   </div>
 
   <!-- ─── 11.6 探索板上的 Linux 系统 ─── -->
-  <h3>步骤 11.6：探索板上的 Linux 系统（初学者第一课）</h3>
+  <h3 id="lv1-explore">步骤 11.6：探索板上的 Linux 系统（初学者第一课）</h3>
   <p>系统跑通后，先别急着写代码。用下面 9 条命令在串口终端里探索你的板子，把<strong>理论知识</strong>和<strong>实际输出</strong>对照起来。命令按难度分组，逐组执行。</p>
 
   <svg viewBox="0 0 680 560" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:rgba(255,255,255,0.55);border:1px solid rgba(31,61,40,0.25);border-radius:14px;margin:16px 0;">
@@ -1519,7 +1519,7 @@ screen /dev/tty.usbmodem* 115200</pre>
   <h4>第 0 步：登录</h4>
   <p>看到 <code class="inline">login:</code> 提示符后输入 <code class="inline">root</code>，密码直接回车（Buildroot 默认无密码）。看到 <code class="inline">#</code> 提示符说明已进入系统。</p>
 
-  <h4>第 1 组：CPU & 内核</h4>
+  <h4 id="lv1-step1">第 1 组：CPU & 内核</h4>
   <div class="cmd-block">
     <div class="label">目标板串口终端 · CPU & 内核</div>
     <pre>uname -a
@@ -1545,7 +1545,7 @@ df -h</pre>
     </ul>
   </div>
 
-  <h4>第 3 组：硬件设备</h4>
+  <h4 id="lv1-step2">第 3 组：硬件设备</h4>
   <div class="cmd-block">
     <div class="label">目标板串口终端 · 硬件设备</div>
     <pre>ls /sys/class/leds/
@@ -1560,7 +1560,7 @@ ls /sys/firmware/devicetree/base/</pre>
     </ul>
   </div>
 
-  <h4>第 4 组：启动 & 日志</h4>
+  <h4 id="lv1-step3">第 4 组：启动 & 日志</h4>
   <div class="cmd-block">
     <div class="label">目标板串口终端 · 启动 & 日志</div>
     <pre>cat /proc/cmdline
@@ -1584,34 +1584,47 @@ ls /</pre>
   <h3>步骤 11.7：初学者进阶路线图</h3>
   <p>系统探索完之后，还可以玩什么？下面是按难度排列的 12 个实践项目，从串口上就能做到写内核模块：</p>
 
-  <svg viewBox="0 0 680 720" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:rgba(255,255,255,0.55);border:1px solid rgba(31,61,40,0.25);border-radius:14px;margin:16px 0;">
+  <svg viewBox="0 0 680 720" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" style="width:100%;height:auto;display:block;background:rgba(255,255,255,0.55);border:1px solid rgba(31,61,40,0.25);border-radius:14px;margin:16px 0;">
+    <style>
+      a.lv-card { cursor: pointer; text-decoration: none; }
+      a.lv-card rect { transition: fill-opacity 0.15s ease; }
+      a.lv-card:hover rect { fill-opacity: 0.55; filter: brightness(0.95); }
+    </style>
     <text x="340" y="28" text-anchor="middle" font-size="15" font-weight="bold" fill="#2a2a2a" font-family="PingFang SC, sans-serif">SAMA5D27 初学者进阶路线图</text>
-    <text x="340" y="46" text-anchor="middle" font-size="11" fill="#888" font-family="PingFang SC, sans-serif">从你已经做到的位置出发，一步步深入</text>
+    <text x="340" y="46" text-anchor="middle" font-size="11" fill="#888" font-family="PingFang SC, sans-serif">点击下方���一卡片直接跳转到对应章节</text>
     <line x1="40" y1="62" x2="640" y2="62" stroke="#D3D1C7" stroke-width="0.5" stroke-dasharray="3,3"/>
 
     <rect x="40" y="75" width="80" height="22" rx="11" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
     <text x="80" y="89" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#085041" font-family="PingFang SC, sans-serif">Lv.1 入门</text>
     <text x="130" y="89" dominant-baseline="central" font-size="11" fill="#5F5E5A" font-family="PingFang SC, sans-serif">串口上就能做，不需要额外硬件</text>
 
-    <rect x="50" y="108" width="270" height="52" rx="8" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
-    <text x="62" y="126" font-size="12" font-weight="bold" fill="#085041" font-family="PingFang SC, sans-serif">1. 探索板上的 Linux 系统</text>
-    <text x="62" y="142" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">cat /proc/cpuinfo, dmesg, free, df</text>
-    <text x="62" y="154" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">看看你自己编译的系统长什么样</text>
+    <a xlink:href="#lv1-explore" class="lv-card">
+      <rect x="50" y="108" width="270" height="52" rx="8" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text x="62" y="126" font-size="12" font-weight="bold" fill="#085041" font-family="PingFang SC, sans-serif">1. 探索板上的 Linux 系统</text>
+      <text x="62" y="142" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">cat /proc/cpuinfo, dmesg, free, df</text>
+      <text x="62" y="154" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">看看你自己编译的系统长什么样</text>
+    </a>
 
-    <rect x="360" y="108" width="270" height="52" rx="8" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
-    <text x="372" y="126" font-size="12" font-weight="bold" fill="#085041" font-family="PingFang SC, sans-serif">2. 用命令行点亮 LED</text>
-    <text x="372" y="142" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">echo 1 > /sys/class/leds/.../brightness</text>
-    <text x="372" y="154" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">一行命令控制硬件，感受 Linux 力量</text>
+    <a xlink:href="#lv1-step2" class="lv-card">
+      <rect x="360" y="108" width="270" height="52" rx="8" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text x="372" y="126" font-size="12" font-weight="bold" fill="#085041" font-family="PingFang SC, sans-serif">2. 用命令行点亮 LED</text>
+      <text x="372" y="142" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">echo 1 &gt; /sys/class/leds/.../brightness</text>
+      <text x="372" y="154" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">一行命令控制硬件，感受 Linux 力量</text>
+    </a>
 
-    <rect x="50" y="172" width="270" height="52" rx="8" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
-    <text x="62" y="190" font-size="12" font-weight="bold" fill="#085041" font-family="PingFang SC, sans-serif">3. 看启动日志逐行解读</text>
-    <text x="62" y="206" font-size="10.5" fill="#5F5E5A" font-family="PingFang SC, sans-serif">重启板子，看 U-Boot → Kernel 全过程</text>
-    <text x="62" y="218" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">把启动链知识和实际对照</text>
+    <a xlink:href="#bootargs-after" class="lv-card">
+      <rect x="50" y="172" width="270" height="52" rx="8" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text x="62" y="190" font-size="12" font-weight="bold" fill="#085041" font-family="PingFang SC, sans-serif">3. 看启动日志逐行解读</text>
+      <text x="62" y="206" font-size="10.5" fill="#5F5E5A" font-family="PingFang SC, sans-serif">重启板子，看 U-Boot → Kernel 全过程</text>
+      <text x="62" y="218" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">把启动链知识和实际对照</text>
+    </a>
 
-    <rect x="360" y="172" width="270" height="52" rx="8" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
-    <text x="372" y="190" font-size="12" font-weight="bold" fill="#085041" font-family="PingFang SC, sans-serif">4. 测试音频</text>
-    <text x="372" y="206" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">cat music.wav > /dev/snd/...</text>
-    <text x="372" y="218" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">验证音频驱动是否正常工作</text>
+    <a xlink:href="#lv1-step3" class="lv-card">
+      <rect x="360" y="172" width="270" height="52" rx="8" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+      <text x="372" y="190" font-size="12" font-weight="bold" fill="#085041" font-family="PingFang SC, sans-serif">4. 测试音频</text>
+      <text x="372" y="206" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">cat music.wav &gt; /dev/snd/...</text>
+      <text x="372" y="218" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">验证音频驱动是否正常工作</text>
+    </a>
 
     <line x1="40" y1="240" x2="640" y2="240" stroke="#D3D1C7" stroke-width="0.5" stroke-dasharray="3,3"/>
 
@@ -1619,15 +1632,19 @@ ls /</pre>
     <text x="80" y="267" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#0C447C" font-family="PingFang SC, sans-serif">Lv.2 网络</text>
     <text x="130" y="267" dominant-baseline="central" font-size="11" fill="#5F5E5A" font-family="PingFang SC, sans-serif">插根网线，脱离串口操作</text>
 
-    <rect x="50" y="286" width="270" height="52" rx="8" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
-    <text x="62" y="304" font-size="12" font-weight="bold" fill="#0C447C" font-family="PingFang SC, sans-serif">5. 配置网络 + SSH 登录</text>
-    <text x="62" y="320" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">ifconfig eth0, ssh root@板子IP</text>
-    <text x="62" y="332" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">以后不用串口也能远程操作</text>
+    <a xlink:href="#lv2-step5" class="lv-card">
+      <rect x="50" y="286" width="270" height="52" rx="8" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
+      <text x="62" y="304" font-size="12" font-weight="bold" fill="#0C447C" font-family="PingFang SC, sans-serif">5. 配置网络 + SSH 登录</text>
+      <text x="62" y="320" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">ifconfig eth0, ssh root@板子IP</text>
+      <text x="62" y="332" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">以后不用串口也能远程操作</text>
+    </a>
 
-    <rect x="360" y="286" width="270" height="52" rx="8" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
-    <text x="372" y="304" font-size="12" font-weight="bold" fill="#0C447C" font-family="PingFang SC, sans-serif">6. SCP 互传文件</text>
-    <text x="372" y="320" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">scp hello root@板子IP:/root/</text>
-    <text x="372" y="332" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">Mac 编译好的程序直接传到板子</text>
+    <a xlink:href="#lv2-step6" class="lv-card">
+      <rect x="360" y="286" width="270" height="52" rx="8" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
+      <text x="372" y="304" font-size="12" font-weight="bold" fill="#0C447C" font-family="PingFang SC, sans-serif">6. SCP 互传文件</text>
+      <text x="372" y="320" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">scp hello root@板子IP:/root/</text>
+      <text x="372" y="332" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">Mac 编译好的程序直接传到板子</text>
+    </a>
 
     <line x1="40" y1="354" x2="640" y2="354" stroke="#D3D1C7" stroke-width="0.5" stroke-dasharray="3,3"/>
 
@@ -1635,25 +1652,33 @@ ls /</pre>
     <text x="80" y="381" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">Lv.3 开发</text>
     <text x="130" y="381" dominant-baseline="central" font-size="11" fill="#5F5E5A" font-family="PingFang SC, sans-serif">回到 Docker 交叉编译，写自己的程序</text>
 
-    <rect x="50" y="400" width="270" height="52" rx="8" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5"/>
-    <text x="62" y="418" font-size="12" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">7. 交叉编译 Hello World</text>
-    <text x="62" y="434" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">arm-linux-gcc hello.c -o hello</text>
-    <text x="62" y="446" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">在 Mac/Docker 编译，在板子上运行</text>
+    <a xlink:href="#lv3-future" class="lv-card">
+      <rect x="50" y="400" width="270" height="52" rx="8" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5"/>
+      <text x="62" y="418" font-size="12" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">7. 交叉编译 Hello World</text>
+      <text x="62" y="434" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">arm-linux-gcc hello.c -o hello</text>
+      <text x="62" y="446" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">在 Mac/Docker 编译，在板子上运行</text>
+    </a>
 
-    <rect x="360" y="400" width="270" height="52" rx="8" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5"/>
-    <text x="372" y="418" font-size="12" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">8. C 程序控制 GPIO</text>
-    <text x="372" y="434" font-size="10.5" fill="#5F5E5A" font-family="PingFang SC, sans-serif">写 C 代码让 LED 闪烁</text>
-    <text x="372" y="446" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">从命令行进化到写真正的程序</text>
+    <a xlink:href="#lv3-future" class="lv-card">
+      <rect x="360" y="400" width="270" height="52" rx="8" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5"/>
+      <text x="372" y="418" font-size="12" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">8. C 程序控制 GPIO</text>
+      <text x="372" y="434" font-size="10.5" fill="#5F5E5A" font-family="PingFang SC, sans-serif">写 C 代码让 LED 闪烁</text>
+      <text x="372" y="446" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">从命令行进化到写真正的程序</text>
+    </a>
 
-    <rect x="50" y="464" width="270" height="52" rx="8" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5"/>
-    <text x="62" y="482" font-size="12" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">9. 给 Buildroot 加软件包</text>
-    <text x="62" y="498" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">make menuconfig 添加 nginx/python</text>
-    <text x="62" y="510" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">重新编译，烧录，玩自己定制的系统</text>
+    <a xlink:href="#lv3-future" class="lv-card">
+      <rect x="50" y="464" width="270" height="52" rx="8" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5"/>
+      <text x="62" y="482" font-size="12" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">9. 给 Buildroot 加软件包</text>
+      <text x="62" y="498" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">make menuconfig 添加 nginx/python</text>
+      <text x="62" y="510" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">重新编译，烧录，玩自己定制的系统</text>
+    </a>
 
-    <rect x="360" y="464" width="270" height="52" rx="8" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5"/>
-    <text x="372" y="482" font-size="12" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">10. 板上跑 Web 服务器</text>
-    <text x="372" y="498" font-size="10.5" fill="#5F5E5A" font-family="PingFang SC, sans-serif">nginx/lighttpd + 简单网页</text>
-    <text x="372" y="510" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">手机浏览器访问板子，控制 LED</text>
+    <a xlink:href="#lv3-future" class="lv-card">
+      <rect x="360" y="464" width="270" height="52" rx="8" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5"/>
+      <text x="372" y="482" font-size="12" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">10. 板上跑 Web 服务器</text>
+      <text x="372" y="498" font-size="10.5" fill="#5F5E5A" font-family="PingFang SC, sans-serif">nginx/lighttpd + 简单网页</text>
+      <text x="372" y="510" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">手机浏览器访问板子，控制 LED</text>
+    </a>
 
     <line x1="40" y1="532" x2="640" y2="532" stroke="#D3D1C7" stroke-width="0.5" stroke-dasharray="3,3"/>
 
@@ -1661,20 +1686,32 @@ ls /</pre>
     <text x="80" y="559" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#712B13" font-family="PingFang SC, sans-serif">Lv.4 进阶</text>
     <text x="130" y="559" dominant-baseline="central" font-size="11" fill="#5F5E5A" font-family="PingFang SC, sans-serif">深入内核，玩设备树和驱动</text>
 
-    <rect x="50" y="578" width="270" height="52" rx="8" fill="#FAECE7" stroke="#F0997B" stroke-width="0.5"/>
-    <text x="62" y="596" font-size="12" font-weight="bold" fill="#712B13" font-family="PingFang SC, sans-serif">11. 写第一个内核模块</text>
-    <text x="62" y="612" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">insmod hello.ko, dmesg 看输出</text>
-    <text x="62" y="624" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">进入内核空间，理解用户态/内核态</text>
+    <a xlink:href="#lv3-future" class="lv-card">
+      <rect x="50" y="578" width="270" height="52" rx="8" fill="#FAECE7" stroke="#F0997B" stroke-width="0.5"/>
+      <text x="62" y="596" font-size="12" font-weight="bold" fill="#712B13" font-family="PingFang SC, sans-serif">11. 写第一个内核模块</text>
+      <text x="62" y="612" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">insmod hello.ko, dmesg 看输出</text>
+      <text x="62" y="624" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">进入内核空间，理解用户态/内核态</text>
+    </a>
 
-    <rect x="360" y="578" width="270" height="52" rx="8" fill="#FAECE7" stroke="#F0997B" stroke-width="0.5"/>
-    <text x="372" y="596" font-size="12" font-weight="bold" fill="#712B13" font-family="PingFang SC, sans-serif">12. 设备树实战 + 读 ADC</text>
-    <text x="372" y="612" font-size="10.5" fill="#5F5E5A" font-family="PingFang SC, sans-serif">修改 dts, 重新编译, 读温度传感器</text>
-    <text x="372" y="624" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">理解设备树如何描述硬件</text>
+    <a xlink:href="#lv3-future" class="lv-card">
+      <rect x="360" y="578" width="270" height="52" rx="8" fill="#FAECE7" stroke="#F0997B" stroke-width="0.5"/>
+      <text x="372" y="596" font-size="12" font-weight="bold" fill="#712B13" font-family="PingFang SC, sans-serif">12. 设备树实战 + 读 ADC</text>
+      <text x="372" y="612" font-size="10.5" fill="#5F5E5A" font-family="PingFang SC, sans-serif">修改 dts, 重新编译, 读温度传感器</text>
+      <text x="372" y="624" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">理解设备树如何描述硬件</text>
+    </a>
 
-    <rect x="50" y="650" width="580" height="48" rx="8" fill="#e8f5ec" stroke="#1f7a4d" stroke-width="0.5"/>
-    <text x="340" y="668" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#1f7a4d" font-family="PingFang SC, sans-serif">你现在在这里：刚点亮板子，从 Lv.1 开始</text>
-    <text x="340" y="684" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5F5E5A" font-family="PingFang SC, sans-serif">每个项目都能逐步深入，从命令行到内核模块</text>
+    <a xlink:href="#lv1-explore" class="lv-card">
+      <rect x="50" y="650" width="580" height="48" rx="8" fill="#e8f5ec" stroke="#1f7a4d" stroke-width="0.5"/>
+      <text x="340" y="668" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#1f7a4d" font-family="PingFang SC, sans-serif">你现在在这里：刚点亮板子，从 Lv.1 开始</text>
+      <text x="340" y="684" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5F5E5A" font-family="PingFang SC, sans-serif">每个项目都能逐步深入，从命令行到内核模块</text>
+    </a>
   </svg>
+
+  <div id="lv3-future" class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);margin:12px 0;">
+    <strong>Lv.3 / Lv.4 项目说明</strong>
+    <p>当前路线图 7-12 号项目（交叉编译、GPIO、Buildroot、Web 服务器、内核模块、设备树）的<strong>详细操作步骤尚未在本文档展开</strong>。这些项目预计在后续章节补齐。你可以先完成 Lv.2 实操步骤，熟练后回到本页继续往下做。</p>
+    <p>建议从 <strong>Lv.2 项目 5（配置网络 + SSH）</strong>开始，点击上方对应卡片可直达步骤。</p>
+  </div>
 
   <div class="table-wrap">
     <table>
@@ -1696,7 +1733,7 @@ ls /</pre>
     </table>
   </div>
 
-  <h4>Lv.2 实操步骤：配置网络 + SSH + SCP</h4>
+  <h4 id="lv2-step5">Lv.2 实操步骤：配置网络 + SSH + SCP</h4>
   <p><strong>前置条件</strong>：用一根网线把板子的以太网口（RJ45）接到路由器/交换机，Mac 也连同一个路由器（同一网段）。</p>
 
   <p><strong>第 5 项：配置网络 + SSH 登录</strong>（前 2 个框在板子串口终端执行，最后 1 个框在 Mac 终端执行）</p>
@@ -1739,7 +1776,7 @@ netstat -tln 2&gt;/dev/null | grep :22</pre>
     </ul>
   </div>
 
-  <p><strong>第 6 项：SCP 互传文件</strong>（在 Mac 终端执行）</p>
+  <p><strong id="lv2-step6">第 6 项：SCP 互传文件</strong>（在 Mac 终端执行）</p>
 
   <div class="cmd-block">
     <div class="label">Mac 终端 · Mac → 板子</div>
@@ -3036,7 +3073,7 @@ int main() {
   </details>
 
   <!-- ─── 12.9 内核收到 bootargs 之后 ─── -->
-  <h3>12.9　内核收到 bootargs 之后：从启动参数到登录提示符</h3>
+  <h3 id="bootargs-after">12.9　内核收到 bootargs 之后：从启动参数到登录提示符</h3>
 
   <p>前面几节讲的是 <strong>U-Boot 怎么把 bootargs 传给内核</strong>。那么内核收到这行参数之后，做了什么？我们可以在板子上用 <code>cat /proc/cmdline</code> 看到内核实际收到的启动指令：</p>
 
