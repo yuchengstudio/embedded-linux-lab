@@ -1687,7 +1687,7 @@ ls /</pre>
     <text x="80" y="381" text-anchor="middle" dominant-baseline="central" font-size="10" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">Lv.3 开发</text>
     <text x="130" y="381" dominant-baseline="central" font-size="11" fill="#5F5E5A" font-family="PingFang SC, sans-serif">回到 Docker 交叉编译，写自己的程序</text>
 
-    <a xlink:href="#lv3-future" class="lv-card">
+    <a xlink:href="#lv3-p7" class="lv-card">
       <rect x="50" y="400" width="270" height="52" rx="8" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5"/>
       <text x="62" y="418" font-size="12" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">7. 交叉编译 Hello World</text>
       <text x="62" y="434" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">arm-linux-gcc hello.c -o hello</text>
@@ -1761,9 +1761,75 @@ ls /</pre>
     })();
   </script>
 
+  <section id="lv3-p7">
+    <h2 class="step"><span class="num">7</span>项目 7 实战：Docker 交叉编译 Hello World</h2>
+    <p>这是 Lv.3 第一个动手项目：在 Mac 上的 Docker 容器里用 ARM 交叉编译器，把你写的 C 程序编成板子能跑的二进制，再传到板子上执行。前置条件：Docker 镜像 <code>sama5-build</code> 和容器 <code>sama5-dev</code> 已按 <a href="#dockerfile">第 4 节</a>、<a href="#container">第 5 节</a> 准备好（DIY 环境默认已就绪）。</p>
+
+    <h3>步骤 7.1：写你自己的程序</h3>
+    <p>在 Mac 的 <code>~/sama5</code> 目录（它挂载到容器的 <code>/work</code>）创建 <code>hello.c</code>。这份文件在 Mac 和容器里是同一份，编出的二进制也会直接出现在 Mac 上。</p>
+    <div class="cmd-block">
+      <div class="label">文件 ~/sama5/hello.c</div>
+      <pre>#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+
+int main(int argc, char *argv[]) {
+    printf("Hello from SAMA5D27 (ARM Cortex-A5)!\n");
+    printf("argc = %d\n", argc);
+    for (int i = 0; i &lt; argc; i++)
+        printf("  argv[%d] = %s\n", i, argv[i]);
+    printf("My pid = %d\n", getpid());
+    return 0;
+}</pre>
+    </div>
+
+    <h3>步骤 7.2：在容器内交叉编译</h3>
+    <div class="cmd-block">
+      <div class="label">在 Mac 终端执行（一键进容器编译，结束后退回 Mac）</div>
+      <pre>docker exec -w /work sama5-dev bash -c 'export CROSS_COMPILE=arm-linux-gnueabihf- &amp;&amp; export ARCH=arm &amp;&amp; arm-linux-gnueabihf-gcc -o hello hello.c &amp;&amp; file hello'</pre>
+    </div>
+    <div class="cmd-explain">
+      <ul>
+        <li><code>docker exec -w /work sama5-dev</code> — 在已运行的 <code>sama5-dev</code> 容器里、<code>/work</code> 目录下执行命令（无需先 <code>enter.sh</code> 进去）。</li>
+        <li><code>CROSS_COMPILE=arm-linux-gnueabihf-</code> — 告诉编译系统用 ARM 交叉编译器（结尾的 <code>-</code> 不能少）。</li>
+        <li><code>arm-linux-gnueabihf-gcc</code> — Ubuntu 提供的 ARM 32 位交叉编译器，编出的是 ARM 指令。</li>
+        <li><code>file hello</code> — 验证产物。<strong>输出含 <code>ELF 32-bit LSB ... ARM</code> 即成功</strong>。</li>
+      </ul>
+    </div>
+
+    <div class="tip">
+      <strong>💡 静态链接更稳</strong>
+      <p>默认编出的是<strong>动态链接</strong>二进制，运行时依赖板子上的 glibc。若板子根文件系统的 glibc 版本比编译器旧，上板会报 <code>version 'GLIBC_2.xx' not found</code>。加 <code>-static</code> 把所有库打进二进制，就能无视版本差异（代价是文件大一些）：</p>
+      <pre>arm-linux-gnueabihf-gcc -static -o hello hello.c</pre>
+    </div>
+
+    <h3>步骤 7.3：在 Mac 上用 QEMU 先跑一遍（可选验证）</h3>
+    <p>不用开发板也能验证程序逻辑：在容器里装 <code>qemu-user-static</code>，就能在 x86 的 Mac 上模拟执行这个 ARM 程序，确认它真的能跑、输出正确。</p>
+    <div class="cmd-block">
+      <div class="label">在容器内执行</div>
+      <pre>apt-get update &amp;&amp; apt-get install -y qemu-user-static
+qemu-arm-static ./hello 参数1 参数2</pre>
+    </div>
+
+    <h3>步骤 7.4：传到板子并运行</h3>
+    <p>板子通过网线接 Mac 共享桥，IP 在 <code>192.168.2.x</code>。先 <code>ping</code> 确认在线，再 <code>scp</code> + <code>ssh</code> 运行（root 密码按板子实际情况填写）。</p>
+    <div class="cmd-block">
+      <div class="label">在 Mac 终端执行</div>
+      <pre>ping -c 2 192.168.2.10
+scp ~/sama5/hello root@192.168.2.10:/root/
+ssh root@192.168.2.10 'chmod +x /root/hello &amp;&amp; /root/hello'</pre>
+    </div>
+    <div class="cmd-explain">
+      <ul>
+        <li><code>scp</code> 复用 SSH 加密通道把文件送到板子（原理见 <a href="#lv2-step6">第 6 项</a>）。</li>
+        <li><code>chmod +x</code> — Docker 挂载卷在 Mac 侧可能丢失可执行位，上板后补一次执行权限最稳。</li>
+        <li>板子打印出 <code>Hello from SAMA5D27 ...</code> 即大功告成 —— 你已完整走通「写程序 → 交叉编译 → 上板运行」。</li>
+      </ul>
+    </div>
+  </section>
+
   <div id="lv3-future" class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);margin:12px 0;">
-    <strong>Lv.3 / Lv.4 项目说明</strong>
-    <p>当前路线图 7-12 号项目（交叉编译、GPIO、Buildroot、Web 服务器、内核模块、设备树）的<strong>详细操作步骤尚未在本文档展开</strong>。这些项目预计在后续章节补齐。你可以先完成 Lv.2 实操步骤，熟练后回到本页继续往下做。</p>
+    <strong>Lv.3 / Lv.4 后续项目</strong>
+    <p><strong>项目 7（交叉编译 Hello World）已展开</strong>在上方。项目 8-12（GPIO、Buildroot 加包、Web 服务器、内核模块、设备树）的<strong>详细操作步骤尚未在本文档展开</strong>，预计在后续章节补齐。你可以先完成 Lv.2 实操步骤，熟练后回到本页继续往下做。</p>
     <p>建议从 <strong>Lv.2 项目 5（配置网络 + SSH）</strong>开始，点击上方对应卡片可直达步骤。</p>
   </div>
 
