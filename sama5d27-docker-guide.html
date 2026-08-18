@@ -1707,6 +1707,25 @@ ls /</pre>
     </a>
   </svg>
 
+  <script>
+    // 路线图卡片点击跳转：兼容 iframe 预览 / 各浏览器，SVG <a xlink:href> 失败时也能跳
+    (function () {
+      function jumpTo(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        try { history.replaceState(null, '', '#' + id); } catch (e) {}
+      }
+      document.querySelectorAll('a.lv-card').forEach(function (a) {
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          var href = a.getAttribute('xlink:href') || a.getAttribute('href') || '';
+          if (href && href.charAt(0) === '#') jumpTo(href.slice(1));
+        });
+      });
+    })();
+  </script>
+
   <div id="lv3-future" class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);margin:12px 0;">
     <strong>Lv.3 / Lv.4 项目说明</strong>
     <p>当前路线图 7-12 号项目（交叉编译、GPIO、Buildroot、Web 服务器、内核模块、设备树）的<strong>详细操作步骤尚未在本文档展开</strong>。这些项目预计在后续章节补齐。你可以先完成 Lv.2 实操步骤，熟练后回到本页继续往下做。</p>
