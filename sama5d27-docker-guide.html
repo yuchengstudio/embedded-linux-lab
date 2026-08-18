@@ -107,11 +107,46 @@
     font-size: 14px; font-weight: 600; margin-bottom: 12px;
     color: var(--green); letter-spacing: 2px; text-transform: uppercase;
   }
-  nav.toc ol { padding-left: 20px; column-count: 2; column-gap: 36px; }
-  nav.toc li { margin: 5px 0; break-inside: avoid; }
-  nav.toc a { color: var(--text); text-decoration: none; font-size: 14px; transition: color .15s; }
-  nav.toc a:hover { color: var(--green); }
-  nav.toc a .sec-no { color: #4a8a5c; font-family: "SF Mono", Menlo, monospace; font-size: 12px; margin-right: 6px; }
+  nav.toc ol { padding-left: 0; }
+  #toc-list { list-style: none; padding-left: 0; column-count: 1; }
+  #toc-list > li { margin: 4px 0; }
+  #toc-list .toc-row { display: flex; align-items: center; gap: 8px; }
+  #toc-list .toc-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; flex-shrink: 0;
+    cursor: pointer; user-select: none;
+    color: #4a8a5c; font-size: 9px; line-height: 1;
+    border-radius: 4px; transition: background .15s;
+    border: 1px solid rgba(74,138,92,0.25);
+    background: rgba(255,255,255,0.45);
+  }
+  #toc-list .toc-toggle:hover { background: rgba(74,138,92,0.18); }
+  #toc-list > li.expanded > .toc-row > .toc-toggle { background: rgba(74,138,92,0.22); color: #2d6a4f; }
+  #toc-list .toc-chap {
+    flex: 1; min-width: 0;
+    color: var(--text); text-decoration: none;
+    font-size: 14px; font-weight: 600; transition: color .15s;
+  }
+  #toc-list .toc-chap:hover { color: var(--green); }
+  #toc-list .toc-chap.active { color: var(--green); }
+  #toc-list .toc-chap .sec-no {
+    color: #4a8a5c; font-family: "SF Mono", Menlo, monospace;
+    font-size: 12px; margin-right: 6px;
+  }
+  #toc-list .toc-subs {
+    display: none; list-style: none;
+    margin: 4px 0 6px 26px; padding: 0;
+    border-left: 1px dashed rgba(74,138,92,0.3);
+  }
+  #toc-list > li.expanded > .toc-subs { display: block; }
+  #toc-list .toc-subs li { margin: 3px 0; padding-left: 14px; }
+  #toc-list .toc-subs a {
+    display: block; padding: 3px 6px; border-radius: 4px;
+    color: var(--text); text-decoration: none;
+    font-size: 12.5px; opacity: 0.82;
+    transition: color .15s, opacity .15s, background .15s;
+  }
+  #toc-list .toc-subs a:hover { color: var(--green); opacity: 1; background: rgba(74,138,92,0.08); }
 
   section { margin-bottom: 56px; }
   h2.step {
@@ -337,7 +372,7 @@
 
 <nav class="toc glass">
   <h2>目录 · Contents</h2>
-  <ol>
+  <ol id="toc-list">
     <li><a href="#concept"><span class="sec-no">01</span>核心概念：为什么用 Docker</a></li>
     <li><a href="#docker-install"><span class="sec-no">02</span>安装 Docker Desktop（Mac）</a></li>
     <li><a href="#tools"><span class="sec-no">03</span>串口工具与工作目录</a></li>
@@ -3901,6 +3936,119 @@ tail -f /root/build.log</pre>
     });
   });
 })();
+</script>
+
+<script>
+  // 目录展开/收起 + 子节跳转 + 滚动时高亮当前章节
+  document.addEventListener('DOMContentLoaded', function () {
+    var list = document.getElementById('toc-list');
+    if (!list) return;
+    var sectionToLi = {};
+
+    function setExpanded(li, expanded) {
+      li.classList.toggle('expanded', expanded);
+      var t = li.querySelector(':scope > .toc-row > .toc-toggle');
+      if (t) {
+        t.textContent = expanded ? '▼' : '▶';
+        t.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      }
+    }
+    function setActive(sectionId) {
+      list.querySelectorAll('.toc-chap.active').forEach(function (el) { el.classList.remove('active'); });
+      if (!sectionId) return;
+      var li = sectionToLi[sectionId];
+      if (!li) return;
+      var c = li.querySelector(':scope > .toc-row > .toc-chap');
+      if (c) c.classList.add('active');
+    }
+
+    // 1) 为每个章节构建 toggle + 子节列表
+    Array.prototype.forEach.call(list.children, function (li) {
+      var chapLink = li.querySelector(':scope > a');
+      if (!chapLink) return;
+      var href = chapLink.getAttribute('href') || '';
+      if (href.charAt(0) !== '#') return;
+      var sectionId = href.slice(1);
+      var section = document.getElementById(sectionId);
+      if (!section) return;
+      sectionToLi[sectionId] = li;
+
+      var row = document.createElement('div');
+      row.className = 'toc-row';
+      var toggle = document.createElement('span');
+      toggle.className = 'toc-toggle';
+      toggle.textContent = '▶';
+      toggle.setAttribute('role', 'button');
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.setAttribute('title', '展开/收起子章节');
+      toggle.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        setExpanded(li, !li.classList.contains('expanded'));
+      });
+      li.insertBefore(row, chapLink);
+      row.appendChild(toggle);
+      row.appendChild(chapLink);
+      chapLink.classList.add('toc-chap');
+      // 点章节标题：跳转的同时立即展开
+      chapLink.addEventListener('click', function () { setExpanded(li, true); });
+
+      // 抓该 section 下所有顶级 h3 作为子节
+      var h3s = section.querySelectorAll(':scope > h3');
+      if (h3s.length === 0) return;
+      var subData = [];
+      Array.prototype.forEach.call(h3s, function (h3, idx) {
+        if (!h3.id) h3.id = sectionId + '-h3-' + (idx + 1);
+        subData.push({ id: h3.id, text: h3.textContent.trim() });
+      });
+      var subOl = document.createElement('ol');
+      subOl.className = 'toc-subs';
+      subData.forEach(function (s) {
+        var subLi = document.createElement('li');
+        var a = document.createElement('a');
+        a.href = '#' + s.id;
+        a.textContent = s.text;
+        subLi.appendChild(a);
+        subOl.appendChild(subLi);
+      });
+      li.appendChild(subOl);
+    });
+
+    // 2) URL hash 命中子节时，自动展开所在章节
+    function syncToHash() {
+      var hash = location.hash.slice(1);
+      if (!hash) return;
+      list.querySelectorAll('.toc-subs a').forEach(function (a) {
+        if (a.getAttribute('href') === '#' + hash) {
+          setExpanded(a.closest('li'), true);
+        }
+      });
+    }
+    syncToHash();
+    window.addEventListener('hashchange', syncToHash);
+
+    // 3) 滚动时高亮当前章节，并自动展开（只展开不收起）
+    var sections = document.querySelectorAll('section[id]');
+    var ticking = false;
+    function updateSpy() {
+      ticking = false;
+      var y = window.scrollY + 120;
+      var current = null;
+      sections.forEach(function (s) {
+        var top = s.getBoundingClientRect().top + window.scrollY;
+        if (top <= y) current = s;
+      });
+      if (current) {
+        setActive(current.id);
+        var li = sectionToLi[current.id];
+        if (li) setExpanded(li, true);
+      }
+    }
+    window.addEventListener('scroll', function () {
+      if (!ticking) { window.requestAnimationFrame(updateSpy); ticking = true; }
+    }, { passive: true });
+    updateSpy();
+  });
 </script>
 </body>
 </html>
