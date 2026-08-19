@@ -2036,6 +2036,56 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
 
     <p>这一项把你在 <a href="#s13-2">第 13.2 节</a>（设备树 → 驱动匹配）和 <a href="#s13-5">第 13.4 节</a>（用户态操作内核接口）学到的东西，用到一个<strong>真实的 SPI 外设</strong>上。先说清楚：<strong>这个实验不是写驱动</strong>——Linux 主线内核已经有 MCP2518FD 的驱动 <code>mcp251xfd</code>（老版本叫 <code>mcp25xxfd</code>），位置 <code>drivers/net/can/spi/mcp251xfd/</code>，配置项 <code>CONFIG_CAN_MCP251XFD</code>。你要做的三件事和项目 8 一个套路：<strong>接线 → 用设备树把芯片挂到 SPI 上 → 让内核的驱动 probe 成功 → 用户态用 SocketCAN 收发</strong>。</p>
 
+    <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
+      <strong>📚 概念补充：什么叫「Linux 主线内核（mainline kernel）」？</strong>
+      <p><strong>主线内核 = Linus Torvalds 亲自维护的官方内核源码树</strong>，托管在 <code>git.kernel.org</code>（仓库 <code>torvalds/linux.git</code>），是整个 Linux 世界的"源头"。每约 2 个月出一个新版本（如 6.12），再分出 <strong>stable 稳定树</strong>（只修 bug 不加功能）和 <strong>LTS 长期支持分支</strong>（如 6.1 / 6.6 / 6.12，维护好几年）。各芯片厂商都从主线 fork 出去打补丁、加板级支持，形成一棵棵分支树——<strong>主线就是它们的"公共祖先"</strong>。</p>
+      <div class="cmd-block">
+        <div class="label">内核源码树层级（主线 vs 厂商分支）</div>
+        <svg viewBox="0 0 680 250" style="width:100%;max-width:680px;margin:8px auto;display:block;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrMK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+              <path d="M0,0 L9,4.5 L0,9 Z" fill="#666"/>
+            </marker>
+          </defs>
+          <rect x="230" y="14" width="220" height="46" rx="8" fill="#fff4d6" stroke="#d4b540" stroke-width="1.4"/>
+          <text x="340" y="34" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#8a7a20">Linux 主线内核 (mainline)</text>
+          <text x="340" y="51" text-anchor="middle" font-size="9.5" fill="#666">torvalds/linux.git · 整个 Linux 的源头</text>
+
+          <rect x="30" y="92" width="150" height="40" rx="6" fill="#eef3ee" stroke="#aaccbb" stroke-width="1.2"/>
+          <text x="105" y="109" text-anchor="middle" font-size="11" font-weight="bold" fill="#2a5a3a">stable 稳定树</text>
+          <text x="105" y="124" text-anchor="middle" font-size="9" fill="#666">只修 bug，不加功能</text>
+
+          <rect x="265" y="92" width="180" height="40" rx="6" fill="#eef3ee" stroke="#aaccbb" stroke-width="1.2"/>
+          <text x="355" y="109" text-anchor="middle" font-size="11" font-weight="bold" fill="#2a5a3a">LTS 长期支持</text>
+          <text x="355" y="124" text-anchor="middle" font-size="9" fill="#666">6.1 / 6.6 / 6.12 …</text>
+
+          <line x1="250" y1="60" x2="105" y2="90" stroke="#666" stroke-width="1.5" marker-end="url(#arrMK)"/>
+          <line x1="340" y1="60" x2="355" y2="90" stroke="#666" stroke-width="1.5" marker-end="url(#arrMK)"/>
+
+          <text x="340" y="160" text-anchor="middle" font-size="10.5" fill="#9a7ad4">厂商分支：都从主线 fork 出去，打补丁 + 加芯片板级支持</text>
+          <line x1="340" y1="60" x2="340" y2="150" stroke="#9a7ad4" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#arrMK)"/>
+
+          <rect x="25" y="170" width="195" height="46" rx="8" fill="#f0e6ff" stroke="#9a7ad4" stroke-width="1.4"/>
+          <text x="122" y="190" text-anchor="middle" font-size="12" font-weight="bold" fill="#4a2a6e">linux-at91</text>
+          <text x="122" y="206" text-anchor="middle" font-size="9.5" fill="#666">Microchip（你的 SAMA5 板）</text>
+
+          <rect x="245" y="170" width="190" height="46" rx="8" fill="#f0e6ff" stroke="#9a7ad4" stroke-width="1.4"/>
+          <text x="340" y="190" text-anchor="middle" font-size="12" font-weight="bold" fill="#4a2a6e">linux-imx</text>
+          <text x="340" y="206" text-anchor="middle" font-size="9.5" fill="#666">NXP i.MX 系列</text>
+
+          <rect x="460" y="170" width="195" height="46" rx="8" fill="#f0e6ff" stroke="#9a7ad4" stroke-width="1.4"/>
+          <text x="557" y="190" text-anchor="middle" font-size="12" font-weight="bold" fill="#4a2a6e">rpi-kernel</text>
+          <text x="557" y="206" text-anchor="middle" font-size="9.5" fill="#666">Raspberry Pi 树莓派</text>
+
+          <line x1="122" y1="150" x2="122" y2="168" stroke="#9a7ad4" stroke-width="1.4" marker-end="url(#arrMK)"/>
+          <line x1="340" y1="150" x2="340" y2="168" stroke="#9a7ad4" stroke-width="1.4" marker-end="url(#arrMK)"/>
+          <line x1="557" y1="150" x2="557" y2="168" stroke="#9a7ad4" stroke-width="1.4" marker-end="url(#arrMK)"/>
+        </svg>
+      </div>
+      <p>你做实验用的 <code>linux-at91</code> 就是 <strong>Microchip 维护的厂商分支</strong>（图左下角）；同理 NXP 有 <code>linux-imx</code>、树莓派有 <code>rpi-kernel</code>。<strong>"主线已有 mcp251xfd 驱动"的确切含义是：这个驱动已被合并进官方内核源码，不是网友野代码</strong>，所以质量有保障、跟着内核一起升级，你也不用自己写——基于较新的主线或 linux-at91 做内核时，<code>make menuconfig</code> 里直接能找到 <code>CONFIG_CAN_MCP251XFD</code>。</p>
+      <p>⚠ <strong>关键：主线已有 ≠ 你板子正在跑的内核已有。</strong>出厂镜像通常是某个较旧的 linux-at91 版本，可能已带 <code>mcp251xfd.ko</code>（那你走方案 2 轻松），也可能压根没开 <code>CONFIG_CAN_MCP251XFD</code>（那就必须走方案 1 重编）。这正是后面那几条确认命令要回答的问题。</p>
+    </div>
+
     <div class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);">
       <strong>一个容易搞混的点：can0 不是 MCP2518。</strong>
       SAMA5D27 芯片<strong>内部自带一个 CAN 控制器</strong>（m_can，板子 DTS 里叫 <code>can1</code> 节点，<code>status="okay"</code>），Linux 里它通常占 <code>can0</code>。所以 MCP2518FD 接上后会出现为 <code>can1</code>。<strong>后面测试时认准 can1</strong>（万一你禁用了内部 CAN，它就是 can0——以 <code>dmesg</code> 为准）。
@@ -2098,6 +2148,61 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
     </div>
     <div class="tip">
       <strong>🎯 晶振频率是硬约束。</strong> 驱动 binding 规定 <code>spi-max-frequency</code> 必须 ≤ 晶振频率的一半、上限 20 MHz。MikroE CAN FD click 多为 <strong>20 MHz 晶振 → SPI 最高 10 MHz</strong>；如果你的模块是 40 MHz 晶振，才上到 20 MHz。下面 DTS 统一按 20 MHz / 10 MHz 写，模块不同就改两个数。
+    </div>
+
+    <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
+      <strong>📚 概念补充：Kconfig 是什么？（方案 1 你在 menuconfig 里「开选项」到底开了啥）</strong>
+      <p><strong>Kconfig 是内核源码树里成千上万个"配置菜单定义文件"</strong>（散落在各子目录，如 <code>drivers/net/can/spi/Kconfig</code>、<code>drivers/spi/Kconfig</code>），用简单语法声明"这个内核支持哪些可选项、叫什么名、依赖谁、默认开不开"。口语说"在 menuconfig 里开 Kconfig 选项"并不严格——<strong>Kconfig 只是只读的菜谱/清单，真正的"你点了哪些菜"记录在根目录的 <code>.config</code> 文件里</strong>（形如 <code>CONFIG_CAN_MCP251XFD=m</code>）。<code>make menuconfig</code> 是把所有 Kconfig 收集起来渲染成图形界面让你勾选的"点餐程序"，勾完保存就往 <code>.config</code> 写对应的 <code>CONFIG_XXX=...</code>。</p>
+      <div class="cmd-block">
+        <div class="label">从 Kconfig 到可加载模块的四步链路</div>
+        <svg viewBox="0 0 680 160" style="width:100%;max-width:680px;margin:8px auto;display:block;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrKC" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+              <path d="M0,0 L9,4.5 L0,9 Z" fill="#666"/>
+            </marker>
+          </defs>
+          <rect x="20" y="45" width="135" height="52" rx="6" fill="#e7f0ff" stroke="#9bbce0" stroke-width="1.2"/>
+          <text x="87" y="66" text-anchor="middle" font-size="11" font-weight="bold" fill="#2c4a6e">Kconfig 文件</text>
+          <text x="87" y="83" text-anchor="middle" font-size="9" fill="#666">各目录菜单清单(只读)</text>
+
+          <rect x="180" y="45" width="135" height="52" rx="6" fill="#fff4d6" stroke="#d4b540" stroke-width="1.2"/>
+          <text x="247" y="66" text-anchor="middle" font-size="11" font-weight="bold" fill="#8a7a20">make menuconfig</text>
+          <text x="247" y="83" text-anchor="middle" font-size="9" fill="#666">图形点餐界面</text>
+
+          <rect x="340" y="45" width="135" height="52" rx="6" fill="#eef3ee" stroke="#aaccbb" stroke-width="1.2"/>
+          <text x="407" y="66" text-anchor="middle" font-size="11" font-weight="bold" fill="#2a5a3a">.config</text>
+          <text x="407" y="83" text-anchor="middle" font-size="9" fill="#666">你的订单 CONFIG_=m</text>
+
+          <rect x="500" y="45" width="160" height="52" rx="6" fill="#f0e6ff" stroke="#9a7ad4" stroke-width="1.2"/>
+          <text x="580" y="66" text-anchor="middle" font-size="11" font-weight="bold" fill="#4a2a6e">Makefile / Kbuild</text>
+          <text x="580" y="83" text-anchor="middle" font-size="9" fill="#666">后厨按 obj-$(CONFIG) 编</text>
+
+          <line x1="155" y1="71" x2="178" y2="71" stroke="#666" stroke-width="1.5" marker-end="url(#arrKC)"/>
+          <line x1="315" y1="71" x2="338" y2="71" stroke="#666" stroke-width="1.5" marker-end="url(#arrKC)"/>
+          <line x1="475" y1="71" x2="498" y2="71" stroke="#666" stroke-width="1.5" marker-end="url(#arrKC)"/>
+
+          <rect x="500" y="112" width="160" height="36" rx="6" fill="#ffe0e0" stroke="#cc6666" stroke-width="1.2"/>
+          <text x="580" y="134" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#8a3333">mcp251xfd.ko / vmlinux</text>
+          <line x1="580" y1="97" x2="580" y2="110" stroke="#cc6666" stroke-width="1.5" marker-end="url(#arrKC)"/>
+        </svg>
+      </div>
+      <p>流程：<strong>① Kconfig 文件</strong>（各目录的菜单清单，声明选项/依赖/默认值）→ <strong>② make menuconfig</strong>（图形点餐界面，你设 y/m/n）→ <strong>③ .config</strong>（你的订单，形如 <code>CONFIG_CAN_MCP251XFD=m</code>）→ <strong>④ Makefile / Kbuild</strong>（后厨，按 <code>obj-$(CONFIG_CAN_MCP251XFD) += mcp251xfd.o</code> 这种规则把 <code>mcp251xfd.c</code> 编成 <code>vmlinux</code>(=y) 或 <code>mcp251xfd.ko</code>(=m)）。</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>配置项</th><th>写在哪个 Kconfig 文件</th><th>menuconfig 里大致路径</th></tr></thead>
+        <tbody>
+          <tr><td><code>CONFIG_CAN</code></td><td><code>net/can/Kconfig</code></td><td>Networking support → CAN bus subsystem</td></tr>
+          <tr><td><code>CONFIG_CAN_DEV</code></td><td><code>net/can/Kconfig</code></td><td>同上 → CAN Device Drivers</td></tr>
+          <tr><td><code>CONFIG_SPI</code></td><td><code>drivers/spi/Kconfig</code></td><td>Device Drivers → SPI support</td></tr>
+          <tr><td><code>CONFIG_SPI_ATMEL</code></td><td><code>drivers/spi/Kconfig</code></td><td>SPI support → Atmel SPI controller</td></tr>
+          <tr><td><code>CONFIG_MFD_ATMEL_FLEXCOM</code></td><td><code>drivers/mfd/Kconfig</code></td><td>Device Drivers → Multifunction device → Atmel Flexcom</td></tr>
+          <tr><td><code>CONFIG_CAN_MCP251XFD</code></td><td><code>drivers/net/can/spi/Kconfig</code></td><td>Networking → CAN → CAN SPI controllers → MCP2518FD</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tip">
+      <strong>💡 实操提醒：</strong> 你用 <code>sama5_defconfig</code> 加载默认配置时，<code>SPI</code> / <code>SPI_ATMEL</code> / <code>MFD_ATMEL_FLEXCOM</code> 大概率默认已是 =y（SAMA5 板子常用）。你真正大概率要手动补的，主要是 <code>CONFIG_CAN</code> 那一支和 <code>CONFIG_CAN_MCP251XFD=m</code>——所以方案 1 的 menuconfig 步骤，重点就是确认并勾上 CAN 子系统 + MCP251XFD 模块。9.1 表里 <code>REGMAP / CAN_RX_OFFLOAD / GPIOLIB</code> 标"不用管"，是因为它们被上面的 <code>select</code> 自动带上，不是你手动开的项。
     </div>
 
     <h3>步骤 9.1：内核配置项（两种方案都要驱动可用）</h3>
