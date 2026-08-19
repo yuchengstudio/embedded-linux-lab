@@ -3843,7 +3843,7 @@ PIOA 控制器写寄存器                  ← 硬件：灯亮</pre>
 
       <h4>第 1 步：DTS 里 <code>gpios = &lt;&amp;pioA 27 1&gt;</code> 到底是什么</h4>
       <p>它不是字符串，是"引用 + 参数"两段式。编译成 DTB 后，<code>&amp;pioA</code> 是个整数 phandle（指向 <code>pioA</code> 节点），<code>27</code> 和 <code>1</code> 是按 <code>#gpio-cells = &lt;2&gt;</code> 约定的 specifier。</p>
-      <pre style="background:#f6f8fa;padding:10px;border-radius:6px;overflow:auto;"><code>leds {
+      <pre style="background:#1e1e1e;color:#e6e6e6;padding:10px;border-radius:6px;overflow:auto;font-family:Menlo,Consolas,monospace;font-size:13px;">leds {
     compatible = "gpio-leds";
     red { gpios = &lt;&amp;pioA 27 1&gt;; };   /* ← 重点看这里 */
 };
@@ -3853,7 +3853,7 @@ pioA: gpio@fc038000 {                 /* ← pioA 是一个 GPIO 控制器节点
     gpio-controller;                  /* 声明"我是 GPIO 控制器" */
     #gpio-cells = &lt;2&gt;;                /* 引用我时用 2 个 cell 描述一个脚 */
     reg = &lt;0xfc038000 0x200&gt;;
-};</code></pre>
+};</pre>
       <ul>
         <li><code>&amp;pioA</code>：<strong>phandle</strong>（指针），相当于"通讯录里 A 公司的电话号"。</li>
         <li><code>27</code>：specifier 第 1 个 cell，按 <code>#gpio-cells = &lt;2&gt;</code> 表示 <strong>pioA 内部的第 27 号引脚</strong>（= 物理 GPIO A27）。</li>
@@ -3871,7 +3871,7 @@ pioA: gpio@fc038000 {                 /* ← pioA 是一个 GPIO 控制器节点
 
       <h4>第 3 步：probe 里读属性，gpiolib 去"查号"</h4>
       <p>你驱动里那句 <code>devm_get_gpiod_from_child(dev, NULL, child)</code> 内部大致做了：</p>
-      <pre style="background:#f6f8fa;padding:10px;border-radius:6px;overflow:auto;"><code>/* 1. 解析 phandle → 找到 pioA 节点 → 找到它对应的 gpio_chip */
+      <pre style="background:#1e1e1e;color:#e6e6e6;padding:10px;border-radius:6px;overflow:auto;font-family:Menlo,Consolas,monospace;font-size:13px;">/* 1. 解析 phandle → 找到 pioA 节点 → 找到它对应的 gpio_chip */
 struct gpio_chip *chip = of_find_gpiochip_by_xlate(...);
 
 /* 2. 读出 specifier (27, 1)，交给该 chip 的翻译官 */
@@ -3879,13 +3879,13 @@ enum gpio_lookup_flags flags;
 int hwgpio = chip-&gt;of_xlate(chip, specifier, &amp;flags);  /* 对 pioA：返回 27 */
 
 /* 3. 用 (chip, 27, flags) 包装出一个 gpio_desc 返回给驱动 */
-led-&gt;gpiod = gpiochip_get_desc(chip, hwgpio);</code></pre>
+led-&gt;gpiod = gpiochip_get_desc(chip, hwgpio);</pre>
       <p><code>of_xlate</code> 就是链接的枢纽：它知道"本控制器用几个 cell、第几个 cell 是 pin 号"，所以能把裸数字 <code>27</code> 翻译成"pioA 这棵 chip 管着的第 27 脚"。不同芯片的 xlate 不同——有的 <code>#gpio-cells=3</code>（bank/pin/flags），xlate 就按那个格式解析。</p>
 
       <h4>第 4 步：<code>gpio_desc</code> 就是那张"已接通的内部工号名片"</h4>
       <p>驱动拿到的 <code>led-&gt;gpiod</code>（<code>struct gpio_desc *</code>）内部记录着三样东西：指向 pioA 的 <code>gpio_chip</code>（谁来控制）、该 chip 内的偏移 <code>27</code>（控制哪个脚）、以及 <code>flags</code>（如 active-low，以后自动反相）。以后所有操作都经它路由：</p>
-      <pre style="background:#f6f8fa;padding:10px;border-radius:6px;overflow:auto;"><code>gpiod_direction_output(led-&gt;gpiod, 0);   /* → pioA.direction_output → 写 PIOA 寄存器 */
-gpiod_set_value(led-&gt;gpiod, 1);          /* → pioA.set → 写 PIOA 寄存器 → 灯亮 */</code></pre>
+      <pre style="background:#1e1e1e;color:#e6e6e6;padding:10px;border-radius:6px;overflow:auto;font-family:Menlo,Consolas,monospace;font-size:13px;">gpiod_direction_output(led-&gt;gpiod, 0);   /* → pioA.direction_output → 写 PIOA 寄存器 */
+gpiod_set_value(led-&gt;gpiod, 1);          /* → pioA.set → 写 PIOA 寄存器 → 灯亮 */</pre>
       <p>GPIO 子系统还会替你处理 flags：若是 active-low，<code>gpiod_set_value(desc, 1)</code> 实际写的是"低电平"——驱动完全不用操心这个细节。</p>
 
       <p><strong>一句话收口：</strong>DTS 写的是"借 pioA 的第 27 脚"。驱动通过 <strong>gpiolib 这个总机</strong>：① 用 phandle 找到 pioA 的控制器驱动 → ② 用 of_xlate 把 <code>27</code> 翻译成该控制器管着的第 27 个引脚 → ③ 拿到一个 <code>gpio_desc</code> 句柄。从此 <code>gpiod_set_value</code> 就顺着这个句柄，落到 pioA 的 <code>.set</code> 回调、再落到硬件寄存器。<strong>"链接"的本质 = phandle 定位控制器 + xlate 定位脚 + desc 把两者打包成一个可操作的句柄。</strong></p>
