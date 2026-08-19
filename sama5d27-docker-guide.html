@@ -1694,7 +1694,7 @@ ls /</pre>
       <text x="62" y="446" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">在 Mac/Docker 编译，在板子上运行</text>
     </a>
 
-    <a xlink:href="#lv3-future" class="lv-card">
+    <a xlink:href="#lv3-p8" class="lv-card">
       <rect x="360" y="400" width="270" height="52" rx="8" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5"/>
       <text x="372" y="418" font-size="12" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">8. C 程序控制 GPIO</text>
       <text x="372" y="434" font-size="10.5" fill="#5F5E5A" font-family="PingFang SC, sans-serif">写 C 代码让 LED 闪烁</text>
@@ -1878,9 +1878,132 @@ ssh root@192.168.2.10 'chmod +x /root/hello &amp;&amp; /root/hello'</pre>
     </div>
   </section>
 
+  <!-- ==================== 8. 项目 8：C 程序控制 GPIO ==================== -->
+  <section id="lv3-p8">
+    <h2 class="step"><span class="num">8</span>项目 8 实战：C 程序控制 GPIO（让板载 LED 闪起来）</h2>
+
+    <p>前面项目 7 你已走通「写程序 → 交叉编译 → 上板运行」。这一项把目标换成<strong>控制硬件</strong>：用 C 程序让板载 LED 一闪一闪。它正好把你在第 13 章学的「设备树 → 驱动 → 硬件」链路在应用层接上——你写的代码在最上层，往下看有四层接口（见文末对比）。</p>
+
+    <div class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);">
+      <strong>先想清楚：你控的到底是什么？</strong>
+      <p>你写的 C 程序<strong>不是直接操作芯片寄存器</strong>，而是往一个 Linux 文件系统里写数字。内核的 LED 驱动接管了那个 GPIO 引脚，你写文件，驱动去翻转物理电平。这就是第 13 章那张「6 层链路」在应用层的一个出口。</p>
+    </div>
+
+    <h3>步骤 8.0：先上板勘察 LED 名字</h3>
+    <p>板载三色灯接在 <code>pioA 27/28/29</code>（红=27、蓝=28、绿=29；绿灯硬件直连电源，软件关不掉，别用它闪烁）。但 <code>/sys/class/leds/</code> 下的<strong>名字不一定叫 red/blue</strong>，所以第一步必须确认：</p>
+    <div class="cmd-block">
+      <div class="label">在 Mac 终端执行（需板子 root 密码）</div>
+      <pre>ssh root@192.168.2.10 'ls /sys/class/leds/'
+ssh root@192.168.2.10 'cat /sys/class/leds/red/max_brightness'</pre>
+    </div>
+    <div class="cmd-explain">
+      <ul>
+        <li><code>ls /sys/class/leds/</code> — 列出板子上被声明为 LED 的设备名（可能是 <code>red blue</code>，也可能是 <code>led0 led1</code>）。把名字记下来，下面写程序要用。</li>
+        <li><code>cat .../max_brightness</code> — 看亮度上限（多为 255）。你写任意 &gt;0 的数都算"亮"，写 <code>0</code> 算"灭"。</li>
+      </ul>
+    </div>
+
+    <h3>步骤 8.1：你的程序要干哪几件事</h3>
+    <p>一个最基础的"闪烁"程序，逻辑只有 4 步。先把思路理顺，再动手写：</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>你要做的</th><th>用的函数</th><th>头文件</th><th>坑</th></tr></thead>
+        <tbody>
+          <tr><td>开文件</td><td><code>fopen(path, "w")</code></td><td><code>&lt;stdio.h&gt;</code></td><td>返回 <code>NULL</code> 要判错，<code>perror("fopen")</code> 打印原因</td></tr>
+          <tr><td>写数字</td><td><code>fprintf(f, "255\n")</code></td><td><code>&lt;stdio.h&gt;</code></td><td><strong>必须紧跟 <code>fflush(f)</code></strong>！stdio 有缓冲，不 flush 写不进 sysfs</td></tr>
+          <tr><td>延时</td><td><code>usleep(500000)</code></td><td><code>&lt;unistd.h&gt;</code></td><td>参数是<strong>微秒</strong>，500000 = 0.5 秒</td></tr>
+          <tr><td>关文件</td><td><code>fclose(f)</code></td><td><code>&lt;stdio.h&gt;</code></td><td>收尾关掉</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tip">
+      <strong>最关键的坑：<code>fflush</code>。</strong> <code>fprintf</code> 默认先写进内存缓冲区，不会立刻落到文件。sysfs 不是普通文件，你不 <code>fflush(f)</code> 一下，灯就一直没反应。所以<strong>每写一次就 <code>fflush(f)</code> 一次</strong>。
+    </div>
+
+    <h3>步骤 8.2：自己写 led_blink.c（留给你动手）</h3>
+    <p>打开编辑器，在 <code>~/sama5/</code> 目录下新建 <code>led_blink.c</code>，按上面 4 步拼出来。下面给一个<strong>骨架提示</strong>（空白处要你自己填，不是现成答案）：</p>
+    <div class="cmd-block">
+      <div class="label">~/sama5/led_blink.c（骨架，待你补全）</div>
+      <pre>#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+
+int main(void) {
+    FILE *f = fopen("/sys/class/leds/???/brightness", "w");  // 把 ??? 换成你 8.0 步看到的灯名
+    if (f == NULL) {
+        perror("fopen");
+        return 1;
+    }
+    for (int i = 0; i &lt; 10; i++) {
+        // 写 255，然后 fflush
+        // 等 0.5 秒
+        // 写 0，然后 fflush
+        // 等 0.5 秒
+    }
+    fclose(f);
+    return 0;
+}</pre>
+    </div>
+    <details>
+      <summary>参考完整实现（验证可用，卡住了再看）</summary>
+      <pre>#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+
+int main(void) {
+    FILE *f = fopen("/sys/class/leds/red/brightness", "w");
+    if (f == NULL) {
+        perror("fopen");
+        return 1;
+    }
+    for (int i = 0; i &lt; 10; i++) {
+        fprintf(f, "255\n");
+        fflush(f);
+        usleep(500000);
+        fprintf(f, "0\n");
+        fflush(f);
+        usleep(500000);
+    }
+    fclose(f);
+    return 0;
+}</pre>
+    </details>
+
+    <h3>步骤 8.3：编译 + 上板运行</h3>
+    <div class="cmd-block">
+      <div class="label">在 Mac 终端执行</div>
+      <pre>docker exec -w /work sama5-dev bash -c 'arm-linux-gnueabihf-gcc -o led_blink led_blink.c'
+docker exec -w /work sama5-dev bash -c 'file led_blink'
+scp ~/sama5/led_blink root@192.168.2.10:/root/
+ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
+    </div>
+    <div class="cmd-explain">
+      <ul>
+        <li>第一行：在容器里用交叉编译器编出 ARM 程序（<code>~/sama5</code> 挂载在 <code>/work</code>）。</li>
+        <li>第二行：确认产物是 <code>ARM 32-bit</code> 的 ELF（动态链接即可，Buildroot 的 glibc 满足；若上板报 <code>GLIBC_2.xx not found</code>，加 <code>-static</code> 重编）。</li>
+        <li>第三、四行：传上板、加执行位并运行，板载红灯随即一闪一闪。</li>
+      </ul>
+    </div>
+
+    <h3>进阶：控制 GPIO 的四种"深度"</h3>
+    <p>你刚写的程序在「应用层」，往下探有四种接口。这正好是第 13 章那 6 层链路的延伸——设备树里 <code>gpios = &lt;&amp;pioA 27 ...&gt;</code> 让内核把 pioA27 配成 LED；你写文件，最终都是<strong>驱动去翻转那个 GPIO 的物理寄存器</strong>。</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>层级</th><th>接口</th><th>你怎么用</th><th>坑</th></tr></thead>
+        <tbody>
+          <tr><td>① LED 子系统</td><td><code>/sys/class/leds/&lt;名&gt;/brightness</code></td><td>写 <code>0</code>/<code>1</code> 点灯</td><td>只能控"被设备树声明为 LED"的引脚（板载红/蓝）；<code>led_blink.c</code> 走这层</td></tr>
+          <tr><td>② 裸 GPIO sysfs</td><td><code>/sys/class/gpio/export</code> + <code>gpioN/{direction,value}</code></td><td>export 空闲脚当输入输出</td><td>板载 LED 脚已被 gpio-leds <strong>独占</strong>，这层看不到；Linux 5.18+ 标记 deprecated 但仍能用</td></tr>
+          <tr><td>③ libgpiod</td><td><code>/dev/gpiochipN</code> + <code>gpiod.h</code></td><td><code>gpiod_chip_open</code>/<code>line_request_output</code>/<code>set_value</code></td><td>现代 chardev 方式，需板子 rootfs 装 libgpiod（Buildroot 选上）</td></tr>
+          <tr><td>④ mmap 寄存器</td><td><code>/dev/mem</code> 直写 PIO 控制器</td><td>写 SODR/CODR/OER 寄存器（PIOA 基址 <code>0xFC038000</code>）</td><td>最硬核、绕开所有驱动、能控任何脚，但写错会搞坏其他功能</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tip">
+      <strong>想玩外部接的 LED（真·裸 GPIO）？</strong> 把 LED+限流电阻接到板子引出的某个空闲 GPIO 与 GND 之间，用 ② 层：<code>echo N &gt; /sys/class/gpio/export</code> 然后写 <code>direction</code>/<code>value</code>。GPIO 编号 = <code>bank*32 + pin</code>（pioA=bank0，pioB=bank1…）。示例代码思路同上，只是文件路径换成 <code>/sys/class/gpio/gpioN/value</code>。
+    </div>
+  </section>
+
   <div id="lv3-future" class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);margin:12px 0;">
     <strong>Lv.3 / Lv.4 后续项目</strong>
-    <p><strong>项目 7（交叉编译 Hello World）已展开</strong>在上方。项目 8-12（GPIO、Buildroot 加包、Web 服务器、内核模块、设备树）的<strong>详细操作步骤尚未在本文档展开</strong>，预计在后续章节补齐。你可以先完成 Lv.2 实操步骤，熟练后回到本页继续往下做。</p>
+    <p><strong>项目 7（交叉编译 Hello World）、项目 8（C 程序控制 GPIO）已展开</strong>在上方。项目 9-12（Buildroot 加包、Web 服务器、内核模块、设备树）的<strong>详细操作步骤尚未在本文档展开</strong>，预计在后续章节补齐。你可以先完成 Lv.2 实操步骤，熟练后回到本页继续往下做。</p>
     <p>建议从 <strong>Lv.2 项目 5（配置网络 + SSH）</strong>开始，点击上方对应卡片可直达步骤。</p>
   </div>
 
