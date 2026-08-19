@@ -385,7 +385,15 @@
     <li><a href="#verify"><span class="sec-no">10</span>产物清单与验证</a></li>
     <li><a href="#deploy"><span class="sec-no">11</span>Buildroot 构建与烧录上板</a></li>
     <li><a href="#bootchain"><span class="sec-no">12</span>SD 卡启动链深度解析</a></li>
-    <li><a href="#devicetree"><span class="sec-no">13</span>设备树、VFS 与 sysfs：从命令到硬件</a></li>
+    <li><a href="#devicetree"><span class="sec-no">13</span>设备树、VFS 与 sysfs：从命令到硬件</a>
+      <ul style="margin:4px 0 6px 18px;font-size:13px;color:#555;">
+        <li><a href="#s13-2">13.2 内核读 MBR 创建设备节点</a></li>
+        <li><a href="#s13-2a">13.2a 设备树 → LED 驱动（驱动创建）</a></li>
+        <li><a href="#s13-3">13.3 LED 设备树实例</a></li>
+        <li><a href="#s13-4">13.4 echo 到点灯的 6 层链路</a></li>
+        <li><a href="#s13-5">13.5 VFS 和 sysfs</a></li>
+      </ul>
+    </li>
     <li><a href="#faq"><span class="sec-no">14</span>常见问题 FAQ</a></li>
     <li><a href="#appendix"><span class="sec-no">15</span>附录：目录关系</a></li>
   </ol>
@@ -3574,7 +3582,7 @@ cat /etc/init.d/rcS</pre>
   </div>
 
   <!-- 13.2 内核读设备树创建设备节点 -->
-  <h3>13.2 内核读 MBR 创建设备节点的过程</h3>
+  <h3 id="s13-2">13.2 内核读 MBR 创建设备节点的过程</h3>
 
   <p>你在板子上跑 <code>ls /dev/mmcblk*</code> 看到 <code>mmcblk0</code>、<code>mmcblk0p1</code>、<code>mmcblk0p2</code>，这些设备节点是怎么来的？</p>
 
@@ -3633,7 +3641,7 @@ cat /etc/init.d/rcS</pre>
   <p>验证这个过程：在板子上跑 <code>dmesg | grep mmcblk0</code>，你会看到类似 <code>mmcblk0: p1 p2</code>，就是内核发现并创建的 2 个分区。</p>
 
   <!-- 13.2a LED 驱动创建（设备树路径） -->
-  <h3>13.2a 另一种创建设备节点的路径：设备树 → LED 驱动</h3>
+  <h3 id="s13-2a">13.2a 另一种创建设备节点的路径：设备树 → LED 驱动</h3>
 
   <p>13.2 讲的是<strong>块设备（SD 卡）</strong>靠读磁盘第 0 扇区的 MBR 分区表来创建 <code>/dev/mmcblk*</code> 节点。LED 这类"板级外设"走的是<strong>另一条路</strong>：硬件信息不是藏在磁盘里，而是写在<strong>设备树 DTS</strong> 里；内核加载对应的 <strong>gpio-leds 驱动</strong>，由驱动在 sysfs 下建 <code>/sys/class/leds/&lt;名&gt;/</code>。下面把"LED 驱动到底怎么创建出来"拆成四段。</p>
 
@@ -3801,7 +3809,7 @@ PIOA 控制器写寄存器                  ← 硬件：灯亮</pre>
   <p>一句话收口：<strong>13.2 是"驱动读硬件自己的元数据"，LED 是"驱动读人写的设备树、再逐个建类设备"</strong>——机制不同，但套路一致。下一节（13.3）就从这棵设备树节点出发，看内核逐行如何把它变成能点亮的灯。</p>
 
   <!-- 13.3 LED 设备树实例 -->
-  <h3>13.3 LED 设备树实例：从 DTS 到点灯</h3>
+  <h3 id="s13-3">13.3 LED 设备树实例：从 DTS 到点灯</h3>
 
   <p>你板子上 LED 部分的设备树源码（DTS）大概长这样：</p>
 
@@ -3904,7 +3912,7 @@ PIOA 控制器写寄存器                  ← 硬件：灯亮</pre>
   </div>
 
   <!-- 13.4 echo 到点灯的完整链路 -->
-  <h3>13.4 从 echo 到点灯：6 层完整链路</h3>
+  <h3 id="s13-4">13.4 从 echo 到点灯：6 层完整链路</h3>
 
   <p>你输入 <code>echo 255 &gt; /sys/class/leds/red/brightness</code> 后，经过了 6 层传递，红灯才亮：</p>
 
@@ -3964,7 +3972,7 @@ PIOA 控制器写寄存器                  ← 硬件：灯亮</pre>
   </svg>
 
   <!-- 13.5 VFS 和 sysfs -->
-  <h3>13.5 VFS 和 sysfs 是什么</h3>
+  <h3 id="s13-5">13.5 VFS 和 sysfs 是什么</h3>
 
   <h4>VFS（虚拟文件系统）= 公司前台</h4>
 
