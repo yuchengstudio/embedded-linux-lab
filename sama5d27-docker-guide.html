@@ -1710,11 +1710,11 @@ ls /</pre>
       <text x="372" y="446" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">从命令行进化到写真正的程序</text>
     </a>
 
-    <a xlink:href="#lv3-future" class="lv-card">
+    <a xlink:href="#lv3-p9" class="lv-card">
       <rect x="50" y="464" width="270" height="52" rx="8" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5"/>
-      <text x="62" y="482" font-size="12" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">9. 给 Buildroot 加软件包</text>
-      <text x="62" y="498" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">make menuconfig 添加 nginx/python</text>
-      <text x="62" y="510" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">重新编译，烧录，玩自己定制的系统</text>
+      <text x="62" y="482" font-size="12" font-weight="bold" fill="#633806" font-family="PingFang SC, sans-serif">9. MCP2518FD SPI-CAN 驱动</text>
+      <text x="62" y="498" font-size="10.5" fill="#5F5E5A" font-family="Menlo, monospace">设备树挂 SPI + 内核 + SocketCAN</text>
+      <text x="62" y="510" font-size="10.5" fill="#888" font-family="PingFang SC, sans-serif">方案1重编 / 方案2 overlay 都走</text>
     </a>
 
     <a xlink:href="#lv3-future" class="lv-card">
@@ -2031,9 +2031,376 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
     </div>
   </section>
 
+  <section id="lv3-p9">
+    <h2 class="step"><span class="num">9</span>项目 9 实战：MCP2518FD SPI-CAN 驱动对接（方案1 重编 + 方案2 overlay 都走）</h2>
+
+    <p>这一项把你在 <a href="#s13-2">第 13.2 节</a>（设备树 → 驱动匹配）和 <a href="#s13-5">第 13.4 节</a>（用户态操作内核接口）学到的东西，用到一个<strong>真实的 SPI 外设</strong>上。先说清楚：<strong>这个实验不是写驱动</strong>——Linux 主线内核已经有 MCP2518FD 的驱动 <code>mcp251xfd</code>（老版本叫 <code>mcp25xxfd</code>），位置 <code>drivers/net/can/spi/mcp251xfd/</code>，配置项 <code>CONFIG_CAN_MCP251XFD</code>。你要做的三件事和项目 8 一个套路：<strong>接线 → 用设备树把芯片挂到 SPI 上 → 让内核的驱动 probe 成功 → 用户态用 SocketCAN 收发</strong>。</p>
+
+    <div class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);">
+      <strong>一个容易搞混的点：can0 不是 MCP2518。</strong>
+      SAMA5D27 芯片<strong>内部自带一个 CAN 控制器</strong>（m_can，板子 DTS 里叫 <code>can1</code> 节点，<code>status="okay"</code>），Linux 里它通常占 <code>can0</code>。所以 MCP2518FD 接上后会出现为 <code>can1</code>。<strong>后面测试时认准 can1</strong>（万一你禁用了内部 CAN，它就是 can0——以 <code>dmesg</code> 为准）。
+    </div>
+
+    <h3>步骤 9.0：硬件连接与原理</h3>
+    <p>MCP2518FD 本身只是<strong>CAN 控制器</strong>，要上总线还必须有<strong>CAN 收发器</strong>（如 TJA1051/TJA1050）把它的逻辑电平变成 CAN 总线差分信号，并且需要一颗<strong>外部晶振</strong>给它提供时钟。最省事的是用 <strong>MikroE "CAN FD click"</strong>：MCP2518FD + 收发器 + 晶振一体，直接插进 SOM1-EK 的 mikroBUS1 插座（SPI/INT/供电都接好了）。下面这张图是信号链：</p>
+
+    <div class="cmd-block">
+      <div class="label">硬件链路</div>
+      <svg viewBox="0 0 680 210" style="width:100%;max-width:680px;margin:8px auto;display:block;" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrMCP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+            <path d="M0,0 L9,4.5 L0,9 Z" fill="#666"/>
+          </marker>
+        </defs>
+        <rect x="20" y="60" width="120" height="74" rx="8" fill="#e7f0ff" stroke="#9bbce0" stroke-width="1.2"/>
+        <text x="80" y="88" text-anchor="middle" font-size="12" font-weight="bold" fill="#2c4a6e">SAMA5D27</text>
+        <text x="80" y="106" text-anchor="middle" font-size="10" fill="#2c4a6e">SPI(flexcom4)</text>
+        <text x="80" y="122" text-anchor="middle" font-size="9" fill="#666">SCK/MOSI/MISO/CS</text>
+
+        <rect x="190" y="60" width="130" height="74" rx="8" fill="#fff4d6" stroke="#d4b540" stroke-width="1.2"/>
+        <text x="255" y="86" text-anchor="middle" font-size="12" font-weight="bold" fill="#8a7a20">MCP2518FD</text>
+        <text x="255" y="104" text-anchor="middle" font-size="10" fill="#8a7a20">CAN FD 控制器</text>
+        <text x="255" y="120" text-anchor="middle" font-size="9" fill="#666">INT → PB0</text>
+
+        <rect x="370" y="60" width="120" height="74" rx="8" fill="#eef3ee" stroke="#aaccbb" stroke-width="1.2"/>
+        <text x="430" y="88" text-anchor="middle" font-size="12" font-weight="bold" fill="#2a5a3a">TJA105x</text>
+        <text x="430" y="106" text-anchor="middle" font-size="10" fill="#2a5a3a">CAN 收发器</text>
+        <text x="430" y="122" text-anchor="middle" font-size="9" fill="#666">电平转换</text>
+
+        <rect x="540" y="60" width="120" height="74" rx="8" fill="#f0e6ff" stroke="#9a7ad4" stroke-width="1.2"/>
+        <text x="600" y="88" text-anchor="middle" font-size="12" font-weight="bold" fill="#4a2a6e">CAN 总线</text>
+        <text x="600" y="106" text-anchor="middle" font-size="10" fill="#4a2a6e">2 线差分</text>
+        <text x="600" y="122" text-anchor="middle" font-size="9" fill="#666">CAN_H / CAN_L</text>
+
+        <line x1="140" y1="97" x2="188" y2="97" stroke="#666" stroke-width="1.6" marker-end="url(#arrMCP)"/>
+        <line x1="320" y1="97" x2="368" y2="97" stroke="#666" stroke-width="1.6" marker-end="url(#arrMCP)"/>
+        <line x1="490" y1="97" x2="538" y2="97" stroke="#666" stroke-width="1.6" marker-end="url(#arrMCP)"/>
+
+        <rect x="190" y="150" width="130" height="38" rx="6" fill="#fff9e6" stroke="#d4b540" stroke-width="1"/>
+        <text x="255" y="172" text-anchor="middle" font-size="10" fill="#8a7a20">外部晶振（click 多为 20 MHz）</text>
+        <line x1="255" y1="150" x2="255" y2="134" stroke="#d4b540" stroke-width="1.4" marker-end="url(#arrMCP)"/>
+      </svg>
+    </div>
+
+    <p>SOM1-EK 的 mikroBUS1 引脚（已从主线 DTS 核对）：SPI 走 <strong>flexcom4</strong>，在板子 DTS 里标签是 <code>&amp;spi6</code>（地址 <code>0xfc018000</code>，默认已 <code>status="okay"</code>）。具体脚位：</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>mikroBUS1 信号</th><th>SAMA5D27 引脚</th><th>接 MCP2518FD</th></tr></thead>
+        <tbody>
+          <tr><td>SPI SCK</td><td>PC30</td><td>SCK</td></tr>
+          <tr><td>SPI MOSI</td><td>PC28</td><td>SI</td></tr>
+          <tr><td>SPI MISO</td><td>PC29</td><td>SO</td></tr>
+          <tr><td>SPI CS（硬件片选）</td><td>PD0（FLEXCOM4_IO4）</td><td>CS</td></tr>
+          <tr><td>INT（中断）</td><td>PB0</td><td>INT（下降沿）</td></tr>
+          <tr><td>+3.3V / GND</td><td>电源轨</td><td>VDD / VSS</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tip">
+      <strong>🎯 晶振频率是硬约束。</strong> 驱动 binding 规定 <code>spi-max-frequency</code> 必须 ≤ 晶振频率的一半、上限 20 MHz。MikroE CAN FD click 多为 <strong>20 MHz 晶振 → SPI 最高 10 MHz</strong>；如果你的模块是 40 MHz 晶振，才上到 20 MHz。下面 DTS 统一按 20 MHz / 10 MHz 写，模块不同就改两个数。
+    </div>
+
+    <h3>步骤 9.1：内核配置项（两种方案都要驱动可用）</h3>
+    <p>无论走方案 1 还是 2，最终都得有 <code>mcp251xfd</code> 驱动。先确认要开哪些 Kconfig（方案 1 你在 <code>menuconfig</code> 里开；方案 2 你希望出厂镜像已经带）：</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>配置项</th><th>作用</th><th>建议</th></tr></thead>
+        <tbody>
+          <tr><td><code>CONFIG_CAN</code></td><td>CAN 子系统总开关</td><td>=y 或 =m</td></tr>
+          <tr><td><code>CONFIG_CAN_DEV</code>（新内核并入 CAN_NETDEV）</td><td>CAN 网络设备支持</td><td>=y</td></tr>
+          <tr><td><code>CONFIG_SPI</code></td><td>SPI 子系统</td><td>=y</td></tr>
+          <tr><td><code>CONFIG_SPI_ATMEL</code></td><td>SAMA5 的 SPI 控制器驱动（管 flexcom4）</td><td>=y</td></tr>
+          <tr><td><code>CONFIG_MFD_ATMEL_FLEXCOM</code></td><td>flexcom 多功驱动（SPI/I2C/UART 复用）</td><td>=y</td></tr>
+          <tr><td><code>CONFIG_CAN_MCP251XFD</code><br><span style="font-size:9px;color:#888">旧内核叫 CONFIG_CAN_MCP25XXFD</span></td><td>我们的主角 mcp251xfd 驱动</td><td>=m 最方便，或 =y</td></tr>
+          <tr><td>REGMAP / CAN_RX_OFFLOAD / GPIOLIB</td><td>上面自动 select 的依赖</td><td>不用管</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
+      <strong>CAN FD 不用单独开开关。</strong> 现代内核的 CAN FD 已合进 CAN 子系统，没有独立的 <code>CONFIG_CANFD</code> 符号；FD 能力由 <code>mcp251xfd</code> 驱动 + 用户态 <code>ip</code> 命令的 <code>fd on</code> 一起提供（见 9.15）。
+    </div>
+
+    <h3>步骤 9.2：设备树片段（方案 1 / 方案 2 共用）</h3>
+    <p>下面这段是<strong>板子专属</strong>的，核心就一个 <code>can@0</code> 子节点挂在 <code>&amp;spi6</code> 下。每行的 🎯 是驱动能 probe 起来的关键：</p>
+    <div class="cmd-block">
+      <div class="label">板子 DTS 里加的片段（方案 1 直接贴进 at91-sama5d27_som1_ek.dts；方案 2 见 9.10 的 overlay 写法）</div>
+      <pre>/* ===== MCP2518FD 接在 mikroBUS1：SPI = flexcom4，DTS 标签是 &amp;spi6 ===== */
+/* 外部晶振频率：MikroE CAN FD click 多为 20 MHz；若你的模块是 40 MHz，把下面改成 40000000 */
+/ {
+    can_osc: can-oscillator {
+        compatible = "fixed-clock";
+        #clock-cells = &lt;0&gt;;
+        clock-frequency = &lt;20000000&gt;;
+    };
+};
+
+&amp;spi6 {
+    status = "okay";
+    can@0 {
+        compatible = "microchip,mcp2518fd";                    /* 🎯 驱动匹配关键字，mcp251xfd 靠它认芯片 */
+        reg = &lt;0&gt;;                                             /* 🎯 SPI 片选 0（mikroBUS1 的 CS=PD0） */
+        pinctrl-names = "default";
+        pinctrl-0 = &lt;&amp;pinctrl_mikrobus1_int&gt;;                 /* 🎯 把 INT 脚 PB0 复用成 GPIO 输入 */
+        interrupts = &lt;&amp;pioA PIN_PB0 IRQ_TYPE_EDGE_FALLING&gt;;    /* 🎯 下降沿中断，接芯片 INT 脚 */
+        clocks = &lt;&amp;can_osc&gt;;                                   /* 🎯 外部晶振，驱动用它算位时序 */
+        spi-max-frequency = &lt;10000000&gt;;                        /* 🎯 ≤ 晶振/2：20MHz→最高10MHz（40MHz→20MHz） */
+        vdd-supply = &lt;&amp;vddin_3v3&gt;;                            /* 可选：给芯片本体的 3.3V */
+        xceiver-supply = &lt;&amp;vddin_3v3&gt;;                        /* 可选：给收发器的 3.3V */
+        status = "okay";
+    };
+};</pre>
+    </div>
+    <div class="cmd-explain">
+      <ul>
+        <li><code>compatible = "microchip,mcp2518fd"</code> 🎯 —— 和驱动 <code>of_match_table</code> 里的字符串一致，内核才把 <code>mcp251xfd</code> 驱动绑定到这个节点（这正是 <a href="#s13-2">13.2</a> 讲的"设备树 → 驱动匹配"）。写 <code>microchip,mcp251xfd</code> 还能让驱动自动识别 2517/2518 型号。</li>
+        <li><code>interrupts</code> 🎯 —— MCP2518 收到 CAN 帧后拉 INT 通知 CPU。-binding 里它是<strong>必填项</strong>（<code>vdd-supply</code>/<code>xceiver-supply</code> 是可选）。</li>
+        <li><code>clocks</code> 🎯 —— 指向外部晶振；驱动读它来配 SPI 时序和位时间。</li>
+        <li><code>pinctrl_mikrobus1_int</code> —— 板子 DTS 里已定义的 PB0→GPIO 复用，这里引用即可，不用重新写脚位。</li>
+        <li>如果 <code>dtc</code> 报 <code>reg</code> 缺 <code>address-cells</code>，在 <code>&amp;spi6</code> 里补 <code>#address-cells = &lt;1&gt;; #size-cells = &lt;0&gt;;</code>（板子 dtsi 一般已带，缺才加）。</li>
+      </ul>
+    </div>
+
+    <hr style="border:none;border-top:1px dashed #ccc;margin:18px 0;">
+
+    <h3>方案 1：有内核源码树，重编 DT + 驱动（最稳，推荐先走）</h3>
+    <p>适合你手上有一份和板子"正在跑的内核"同版本的内核源码。优点是全改、最可控；缺点是编译耗时。</p>
+
+    <h4>步骤 9.3：获取内核源码</h4>
+    <div class="cmd-block">
+      <div class="label">在 Mac / Docker 里</div>
+      <pre>git clone https://github.com/linux4sam/linux-at91.git
+cd linux-at91
+git checkout linux4sam-2024.04     # 选与你板子烧录镜像同版本的 tag（uname -r 能看出版本线索）
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig</pre>
+    </div>
+
+    <h4>步骤 9.4：把 9.2 的片段贴进板子 DTS</h4>
+    <p>打开 <code>arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dts</code>（新内核在 <code>microchip/</code> 子目录），在文件末尾的 <code>/ { ... };</code> 之外、或已有的 <code>&amp;spi6</code> 节点里，加上 9.2 那段（<code>can_osc</code> 时钟放根节点，<code>can@0</code> 子节点放 <code>&amp;spi6</code> 下）。</p>
+
+    <h4>步骤 9.5：menuconfig 开驱动</h4>
+    <div class="cmd-block">
+      <div class="label">在 Mac / Docker 里</div>
+      <pre>make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- menuconfig
+# 进 Device Drivers → Networking support → CAN Bus subsystem → CAN Device Drivers
+#   → SPI CAN Controllers → Microchip MCP251xFD SPI CAN controller
+# 选 M（模块）或 *（编进内核），保存退出</pre>
+    </div>
+
+    <h4>步骤 9.6：编译 dtb 与模块</h4>
+    <div class="cmd-block">
+      <div class="label">在 Mac / Docker 里（docker 里可 docker exec -w /work sama5-dev bash -c '...'）</div>
+      <pre>make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) dtbs
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) modules</pre>
+    </div>
+    <div class="cmd-explain">
+      <ul>
+        <li>产物 dtb：<code>arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dtb</code></li>
+        <li>产物 ko：<code>drivers/net/can/spi/mcp251xfd/mcp251xfd.ko</code></li>
+      </ul>
+    </div>
+
+    <h4>步骤 9.7：上板部署</h4>
+    <div class="cmd-block">
+      <div class="label">在 Mac 终端执行（需板子 root 密码）</div>
+      <pre># 1) 换设备树（先备份旧的！）
+ssh root@192.168.2.10 'cp /boot/dtbs/at91-sama5d27_som1_ek.dtb /boot/dtbs/at91-sama5d27_som1_ek.dtb.bak'
+scp arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dtb \
+    root@192.168.2.10:/boot/dtbs/at91-sama5d27_som1_ek.dtb
+
+# 2) 拷驱动模块（若编成 =m）
+scp drivers/net/can/spi/mcp251xfd/mcp251xfd.ko \
+    root@192.168.2.10:/lib/modules/$(ssh root@192.168.2.10 'uname -r')/kernel/drivers/net/can/spi/
+
+# 3) 刷模块依赖并加载（若编成 =y 这步可省，开机自动有）
+ssh root@192.168.2.10 'depmod -a &amp;&amp; modprobe mcp251xfd'</pre>
+    </div>
+
+    <h4>步骤 9.8：验证 probe 成功</h4>
+    <div class="cmd-block">
+      <div class="label">在板子上</div>
+      <pre>dmesg | grep mcp251xfd
+# 期望看到类似：
+# mcp251xfd spi6.0 can1: MCP2518FD rev0.0 (...) successfully initialized.
+ip link show can1        # 能看到 can1 接口 = 驱动已建好网络设备和 sysfs</pre>
+    </div>
+    <div class="tip"><strong>看到 "successfully initialized" + can1 出现 = 方案 1 成功。</strong> 直接跳到 9.15 做用户态收发测试。</div>
+
+    <hr style="border:none;border-top:1px dashed #ccc;margin:18px 0;">
+
+    <h3>方案 2：只有出厂镜像，走 DT overlay（不重编内核）</h3>
+    <p>适合出厂镜像<strong>已经自带</strong> <code>mcp251xfd.ko</code>、你只想追加一块新硬件。关键是：仍得有<strong>匹配</strong>的驱动模块，否则 overlay 加载了也白搭（见 9.14）。</p>
+
+    <h4>步骤 9.9：先查出厂镜像有没有驱动</h4>
+    <div class="cmd-block">
+      <div class="label">在板子上</div>
+      <pre>uname -r
+ls /lib/modules/$(uname -r)/kernel/drivers/net/can/spi/    # 有没有 mcp251xfd.ko / mcp25xxfd.ko
+zcat /proc/config.gz 2&gt;/dev/null | grep -E 'CAN_MCP251XFD|CAN_MCP25XXFD|SPI_ATMEL'</pre>
+    </div>
+    <div class="cmd-explain">
+      <ul>
+        <li>若 <code>=m</code> 且 <code>.ko</code> 存在 → <strong>方案 2 很轻松</strong>，继续 9.10。</li>
+        <li>若 <code>=n</code> 或没有 <code>.ko</code> → 出厂内核没带驱动，方案 2 走不通，<strong>退回方案 1</strong>（或按匹配内核头文件编外部模块，本质还是要有源码）。</li>
+      </ul>
+    </div>
+
+    <h4>步骤 9.10：写 overlay（.dts）</h4>
+    <p>overlay 是"只描述新增部分"的片段，用 <code>/plugin/;</code> 语法。把 9.2 那段改写成 overlay（时钟放根、<code>can@0</code> 挂 <code>&amp;spi6</code>）：</p>
+    <div class="cmd-block">
+      <div class="label">文件 ~/sama5/mcp2518-overlay.dts</div>
+      <pre>/dts-v1/;
+/plugin/;
+#include &lt;dt-bindings/gpio/gpio.h&gt;
+#include &lt;dt-bindings/interrupt-controller/irq.h&gt;
+
+/ {
+    can_osc: can-oscillator {
+        compatible = "fixed-clock";
+        #clock-cells = &lt;0&gt;;
+        clock-frequency = &lt;20000000&gt;;
+    };
+};
+
+&amp;spi6 {
+    status = "okay";
+    can@0 {
+        compatible = "microchip,mcp2518fd";
+        reg = &lt;0&gt;;
+        pinctrl-names = "default";
+        pinctrl-0 = &lt;&amp;pinctrl_mikrobus1_int&gt;;
+        interrupts = &lt;&amp;pioA PIN_PB0 IRQ_TYPE_EDGE_FALLING&gt;;
+        clocks = &lt;&amp;can_osc&gt;;
+        spi-max-frequency = &lt;10000000&gt;;
+        vdd-supply = &lt;&amp;vddin_3v3&gt;;
+        xceiver-supply = &lt;&amp;vddin_3v3&gt;;
+        status = "okay";
+    };
+};</pre>
+    </div>
+
+    <h4>步骤 9.11：编译成 .dtbo</h4>
+    <p>Microchip 官方有 <code>dt-overlay-at91</code> 仓库，用内核自带的 dtc 编，最不容易出错：</p>
+    <div class="cmd-block">
+      <div class="label">在 Mac / Docker 里</div>
+      <pre>git clone https://github.com/linux4sam/dt-overlay-at91.git
+cd dt-overlay-at91
+export KERNEL_DIR=../linux-at91          # 指向你 9.3 那份已编译过的内核源码树
+export ARCH=arm
+export CROSS_COMPILE=arm-linux-gnueabihf-
+make sama5d27_som1_ek_dtbos               # 编出板子相关的 .dtbo（含你新增的 mcp2518 节点）</pre>
+    </div>
+    <p>或者手动用 dtc（需带内核 include 路径）：</p>
+    <div class="cmd-block">
+      <div class="label">在 Mac / Docker 里</div>
+      <pre>dtc -@ -I dts -O dtb \
+    -i ../linux-at91/include \
+    -o mcp2518.dtbo mcp2518-overlay.dts</pre>
+    </div>
+
+    <h4>步骤 9.12：应用 overlay（二选一）</h4>
+    <p><strong>方式 A：U-Boot 启动时 fdt apply（运行时叠加，不改基础 dtb）</strong></p>
+    <div class="cmd-block">
+      <div class="label">板子串口进 U-Boot 命令行</div>
+      <pre># 先把 .dtbo 放到 /boot（方案1的 scp 同样适用），U-Boot 里：
+=&gt; load mmc 0:1 ${fdt_addr_r} /boot/dtbs/at91-sama5d27_som1_ek.dtb
+=&gt; load mmc 0:1 0x25000000 /boot/mcp2518.dtbo      # 另选一块空闲内存
+=&gt; fdt addr ${fdt_addr_r}
+=&gt; fdt apply 0x25000000                            # 把 overlay 叠到基础 dtb 上
+=&gt; boot                                            # 正常启动，内核看到的就是叠加后的设备树</pre>
+    </div>
+    <p><strong>方式 B：在电脑上用 fdtoverlay 烘焙进基础 dtb（一次成型，最省事）</strong></p>
+    <div class="cmd-block">
+      <div class="label">在 Mac / Docker 里</div>
+      <pre># 先取板子的基础 dtb（从 /boot 拷出来，或用 9.6 编出的那个）
+fdtoverlay -i at91-sama5d27_som1_ek.dtb \
+           -o at91-sama5d27_som1_ek.dtb \
+           mcp2518.dtbo
+# 再把烘焙好的 dtb 拷回板子 /boot/dtbs/ 覆盖（先备份！），重启</pre>
+    </div>
+    <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
+      <strong>SAMA5 上 overlay 比树莓派麻烦。</strong> 树莓派有现成的 <code>dtoverlay=</code> 配置；SAMA5 要么走 U-Boot <code>fdt apply</code>，要么像方式 B 用 <code>fdtoverlay</code> 烘焙。两种方式都不需要重编内核，只要驱动模块匹配就行。
+    </div>
+
+    <h4>步骤 9.13：加载驱动并验证</h4>
+    <div class="cmd-block">
+      <div class="label">在板子上</div>
+      <pre>modprobe mcp251xfd
+dmesg | grep mcp251xfd
+# 期望：mcp251xfd spi6.0 can1: MCP2518FD rev0.0 (...) successfully initialized.
+ip link show can1</pre>
+    </div>
+
+    <h4>步骤 9.14：方案 2 的坑</h4>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>现象</th><th>原因 / 处理</th></tr></thead>
+        <tbody>
+          <tr><td>出厂没有 mcp251xfd.ko</td><td>驱动不匹配硬门槛 → 退回方案 1，或拿运行内核的 headers + Module.symvers 编外部模块</td></tr>
+          <tr><td>overlay 加载报 "symbol pinctrl_mikrobus1_int not found"</td><td>基础 dtb 没开符号；用 <code>dt-overlay-at91</code> 的 Makefile 编（自动带 <code>-@</code>），别手动 dtc 漏 <code>-@</code></td></tr>
+          <tr><td>改了 overlay 重启没生效</td><td>确认 .dtbo 真的拷到了 /boot 且路径对；方式 A 要每次 U-Boot 都 fdt apply，或写进 U-Boot 环境变量</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <hr style="border:none;border-top:1px dashed #ccc;margin:18px 0;">
+
+    <h3>步骤 9.15：用户态测试（SocketCAN，两种方案通用）</h3>
+    <p>CAN 是<strong>网络设备</strong>，不是 sysfs 文件，所以用 <code>ip</code> / <code>can-utils</code>，不是 <code>echo</code>。先确认板子装了 <code>cansend</code> / <code>candump</code>（Buildroot 选 <code>can-utils</code> 包，或 <code>opkg install can-utils</code>）。</p>
+    <div class="cmd-block">
+      <div class="label">在板子上</div>
+      <pre># 配置 CAN FD：仲裁段 500k，数据段 2M，开 FD
+ip link set can1 type can bitrate 500000 dbitrate 2000000 fd on
+ip link set can1 up
+
+# 另开一个终端收
+candump can1 &amp;
+
+# 发一帧 FD 帧（123 是 CAN ID，##1 表示 FD 帧，后面是数据）
+cansend can1 123##1.11.22.33.44</pre>
+    </div>
+    <div class="cmd-explain">
+      <ul>
+        <li>没有第二个 CAN 节点做环路测试？开<strong>回环</strong>自测：<code>ip link set can1 type can bitrate 500000 fd on loopback on</code>，然后 <code>cansend</code> 自己就能在 <code>candump</code> 里收到。</li>
+        <li>只想要经典 CAN（非 FD）：<code>ip link set can1 type can bitrate 500000</code> 即可，不加 <code>dbitrate ... fd on</code>。</li>
+        <li>这整段就是你写 sysfs 控制 LED 的"对等物"——只不过这回操作的不是 <code>/sys/class/leds/</code>，而是内核的 CAN 网络设备（<a href="#s13-5">13.4</a> 的用户态↔内核态边界在这里同样适用）。</li>
+      </ul>
+    </div>
+
+    <h3>步骤 9.16：排错要点</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>现象</th><th>排查方向</th></tr></thead>
+        <tbody>
+          <tr><td>probe 失败 / dmesg 报 SPI 传输错、CRC</td><td>SPI 没通：查 <code>spi-max-frequency</code> 是否超晶振一半；查接线；用 <code>spidev</code> 裸测 SPI 先排除硬件</td></tr>
+          <tr><td>dmesg 报 "failed to get ... clock"</td><td><code>can_osc</code> 固定时钟节点没定义或名字对不上</td></tr>
+          <tr><td>能收不能发</td><td>已知坑（多个平台报告过），多为驱动/内核版本问题；先 <code>loopback on</code> 验证"能发"，再考虑换内核或开 <code>CONFIG_CAN_MCP251XFD_SANITY</code></td></tr>
+          <tr><td>can1 不出现</td><td>模块没加载（<code>lsmod | grep mcp251xfd</code>）；或 dtb/overlay 没生效（<code>dtc -I fs /proc/device-tree</code> 看节点在不在）</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>方案 1 vs 方案 2：怎么选</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>方案 1：内核源码树重编</th><th>方案 2：出厂镜像 + DT overlay</th></tr></thead>
+        <tbody>
+          <tr><td>前提</td><td>有一份匹配运行内核的源码树</td><td>出厂镜像已带 mcp251xfd.ko</td></tr>
+          <tr><td>改什么</td><td>直接改板子 .dts，<code>make dtbs</code></td><td>写独立 .dtbo，U-Boot fdt apply 或 fdtoverlay 烘焙</td></tr>
+          <tr><td>驱动来源</td><td><code>make modules</code> 编出 .ko，或 =y 编进内核</td><td>直接用出厂 .ko，<code>modprobe</code></td></tr>
+          <tr><td>能改的范围</td><td>全改（Kconfig/DT/内置随意）</td><td>只追加设备描述，动不了内核本身</td></tr>
+          <tr><td>主要风险</td><td>源码版本/配置不对 → 模块 vermagic 不匹配</td><td>模块匹配是硬门槛；overlay 在 SAMA5 比树莓派麻烦</td></tr>
+          <tr><td>适合</td><td>要做实验、多半要新开 CONFIG_CAN_MCP251XFD</td><td>出厂内核已自带驱动、只想挂新硬件</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);">
+      <strong>为什么让你两个都走一遍：</strong> 方案 1 让你完整理解"设备树怎么进内核、驱动怎么编出来"；方案 2 让你体会"出厂系统上最小改动挂硬件"的工程现实。两者在 <code>dmesg</code> 看到 <code>successfully initialized</code> 的那一刻汇合——驱动 probe 成功的判据完全一样。这正是 <a href="#s13-2">13.2</a>（设备树→驱动匹配）和 <a href="#s13-5">13.4</a>（用户态操作内核接口）的真实外设落地。
+    </div>
+  </section>
+
   <div id="lv3-future" class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);margin:12px 0;">
     <strong>Lv.3 / Lv.4 后续项目</strong>
-    <p><strong>项目 7（交叉编译 Hello World）、项目 8（C 程序控制 GPIO）已展开</strong>在上方。项目 9-12（Buildroot 加包、Web 服务器、内核模块、设备树）的<strong>详细操作步骤尚未在本文档展开</strong>，预计在后续章节补齐。你可以先完成 Lv.2 实操步骤，熟练后回到本页继续往下做。</p>
+    <p><strong>项目 7（交叉编译 Hello World）、项目 8（C 程序控制 GPIO）、项目 9（MCP2518FD SPI-CAN 驱动）已展开</strong>在上方。项目 10-12（Web 服务器、内核模块、设备树实战）的<strong>详细操作步骤尚未在本文档展开</strong>，预计在后续章节补齐。你可以先完成 Lv.2 实操步骤，熟练后回到本页继续往下做。</p>
     <p>建议从 <strong>Lv.2 项目 5（配置网络 + SSH）</strong>开始，点击上方对应卡片可直达步骤。</p>
   </div>
 
