@@ -1979,6 +1979,27 @@ int main(void) {
     <h3>步骤 8.3：编译 + 上板运行</h3>
     <div class="cmd-block">
       <div class="label">在 Mac 终端执行</div>
+    <details class="deep-dive">
+      <summary>📖 循环体逐句解读（for 循环那 9 行）</summary>
+      <p>下面把 <code>for</code> 循环里的每一句拆开讲——整段逻辑就是"亮 0.5 秒、灭 0.5 秒、重复 10 次"。</p>
+      <ol>
+        <li><code>for (int i = 0; i &lt; 10; i++)</code><br>
+          <strong>for 循环控制重复次数</strong>，分三段：<code>int i = 0</code> 先声明计数器 <code>i</code> 并初始化为 0；<code>i &lt; 10</code> 每轮循环前检查，只要 <code>i</code> 小于 10 就继续（共跑 10 轮）；<code>i++</code> 每轮结束后 <code>i</code> 自增 1。10 轮跑完，灯闪 10 次。</li>
+        <li><code>{</code><br>循环体开始（花括号包住下面要重复执行的内容）。</li>
+        <li><code>fprintf(f, "255\n");</code><br><strong>往文件写 "255"</strong>。<code>f</code> 是前面 <code>fopen("/sys/class/leds/red/brightness", "w")</code> 打开的文件指针；<code>fprintf</code> 像 <code>printf</code> 但写向文件；<code>"255\n"</code> 末尾 <code>\n</code> 是换行（sysfs 属性通常要求以换行结尾）。写 255 进 brightness → 内核 LED 驱动收到"点亮" → 红灯亮。</li>
+        <li><code>fflush(f);</code><br><strong>强制把缓冲区内容刷到文件</strong>（之前那个 bug 就是这行被注释掉了）。<code>fprintf</code> 默认先写进 stdio 的<strong>内存缓冲区</strong>，不 flush 不落盘；<code>fflush(f)</code> 命令内核"现在就把数据真正写进去"。不 flush，sysfs 收不到变化，灯就不闪。所以每次写都紧跟一个 <code>fflush</code>。</li>
+        <li><code>usleep(500000);</code><br><strong>延时 0.5 秒</strong>。<code>usleep</code> 单位是<strong>微秒</strong>（1 秒 = 1,000,000 微秒），<code>500000</code> = 0.5 秒，让灯保持"亮"半秒，肉眼才看得到闪。</li>
+        <li><code>fprintf(f, "0\n");</code><br><strong>往文件写 "0"</strong> → 内核收到"熄灭" → 红灯灭。和上面那行对称。</li>
+        <li><code>fflush(f);</code><br><strong>再次强制刷盘</strong>，让 "0" 真正写进 sysfs（灭灯也必 flush）。</li>
+        <li><code>usleep(500000);</code><br><strong>再延时 0.5 秒</strong>，让"灭"的状态保持半秒。</li>
+        <li><code>}</code><br>循环体结束，回到 <code>for</code> 的 <code>i++</code> 和 <code>i &lt; 10</code> 判断，决定下一轮是否继续。</li>
+      </ol>
+      <p><strong>整体节奏</strong>：一轮循环 = 亮(0.5s) → 灭(0.5s)，共 10 轮 → 灯闪 10 次，约 10 秒结束。两个关键零件：<code>fflush(f)</code> 两次都在场（缺它就完全不闪）；<code>usleep</code> 参数是微秒（别写成 500，那是 0.5 毫秒，肉眼看不出闪）。</p>
+    </details>
+
+    <h3>步骤 8.3：编译 + 上板运行</h3>
+    <div class="cmd-block">
+      <div class="label">在 Mac 终端执行</div>
       <pre>docker exec -w /work sama5-dev bash -c 'arm-linux-gnueabihf-gcc -o led_blink led_blink.c'
 docker exec -w /work sama5-dev bash -c 'file led_blink'
 scp ~/sama5/led_blink root@192.168.2.10:/root/
