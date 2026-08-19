@@ -389,6 +389,7 @@
       <ul style="margin:4px 0 6px 18px;font-size:13px;color:#555;">
         <li><a href="#s13-2">13.2 内核读 MBR 创建设备节点</a></li>
         <li><a href="#s13-2a">13.2a 设备树 → LED 驱动（驱动创建）</a></li>
+        <li><a href="#s13-2b">13.2b 资源(pioA)vs 用法(leds) + sysfs 为何比 DTS 多</a></li>
         <li><a href="#s13-3">13.3 LED 设备树实例</a></li>
         <li><a href="#s13-4">13.4 echo 到点灯的 6 层链路</a></li>
         <li><a href="#s13-5">13.5 VFS 和 sysfs</a></li>
@@ -3906,6 +3907,127 @@ gpiod_set_value(led-&gt;gpiod, 1);          /* → pioA.set → 写 PIOA 寄存�
       <p><strong>一句话收口：</strong>DTS 写的是"借 pioA 的第 27 脚"。驱动通过 <strong>gpiolib 这个总机</strong>：① 用 phandle 找到 pioA 的控制器驱动 → ② 用 of_xlate 把 <code>27</code> 翻译成该控制器管着的第 27 个引脚 → ③ 拿到一个 <code>gpio_desc</code> 句柄。从此 <code>gpiod_set_value</code> 就顺着这个句柄，落到 pioA 的 <code>.set</code> 回调、再落到硬件寄存器。<strong>"链接"的本质 = phandle 定位控制器 + xlate 定位脚 + desc 把两者打包成一个可操作的句柄。</strong></p>
     </div>
   </details>
+
+  <h3 id="s13-2b">13.2b 设备树的两个角色：资源（pioA）vs 用法（leds），以及为何 sysfs 文件比 DTS 多</h3>
+
+  <h4>一、leds 与 pioA 的分工：资源 vs 用法</h4>
+  <p>你之前卡在"为什么一件事要写两段"。核心答案是：<strong>pioA 是"资源"，leds 是"用法"</strong>，它们管的是两件互相独立、会各自变化的事。</p>
+
+  <svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+    <rect x="0" y="0" width="680" height="300" fill="#f5f7fa"/>
+    <text x="340" y="26" text-anchor="middle" font-size="15.5" font-weight="bold" fill="#1f2937">设备树这两段，谁是"资源"谁是"用法"？</text>
+    <defs>
+      <marker id="arr13c" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#dc2626"/>
+      </marker>
+    </defs>
+    <rect x="25" y="50" width="290" height="200" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+    <text x="170" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#1e40af">pioA：资源（配电箱 / 物业）</text>
+    <text x="42" y="100" font-family="Menlo,Consolas,monospace" font-size="11" fill="#374151">gpio@fc038000 {</text>
+    <text x="56" y="120" font-family="Menlo,Consolas,monospace" font-size="10" fill="#6b7280">compatible="atmel,sama5d2-gpio"</text>
+    <text x="56" y="140" font-family="Menlo,Consolas,monospace" font-size="10" fill="#6b7280">gpio-controller;  ← 我是控制器</text>
+    <text x="56" y="160" font-family="Menlo,Consolas,monospace" font-size="10" fill="#6b7280">#gpio-cells = &lt;2&gt;</text>
+    <text x="56" y="180" font-family="Menlo,Consolas,monospace" font-size="10" fill="#6b7280">reg = &lt;0xfc038000 0x200&gt;</text>
+    <text x="42" y="200" font-family="Menlo,Consolas,monospace" font-size="11" fill="#374151">}</text>
+    <text x="42" y="226" font-size="10.5" fill="#1e40af">管 32 根线(脚 0~31)，</text>
+    <text x="42" y="244" font-size="10.5" fill="#1e40af">不知哪根是"灯"——全是线</text>
+    <rect x="365" y="50" width="290" height="200" rx="10" fill="#ffffff" stroke="#16a34a" stroke-width="2"/>
+    <text x="510" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#166534">leds：用法（装修方案）</text>
+    <text x="382" y="100" font-family="Menlo,Consolas,monospace" font-size="11" fill="#374151">leds {</text>
+    <text x="396" y="120" font-family="Menlo,Consolas,monospace" font-size="10" fill="#6b7280">compatible="gpio-leds"</text>
+    <text x="396" y="140" font-family="Menlo,Consolas,monospace" font-size="10" fill="#6b7280">red { gpios=&lt;&amp;pioA 27 1&gt; }</text>
+    <text x="382" y="160" font-family="Menlo,Consolas,monospace" font-size="11" fill="#374151">}</text>
+    <text x="382" y="186" font-size="10.5" fill="#166534">只说"要什么功能"：</text>
+    <text x="392" y="204" font-size="10.5" fill="#374151">• 客厅灯=第27脚, 低电平亮</text>
+    <text x="392" y="222" font-size="10.5" fill="#374151">• 逻辑名 red</text>
+    <text x="392" y="240" font-size="10.5" fill="#374151">• 不关心脚怎么翻电平</text>
+    <line x1="315" y1="150" x2="365" y2="150" stroke="#dc2626" stroke-width="2.5" marker-end="url(#arr13c)"/>
+    <text x="340" y="143" text-anchor="middle" font-size="9.5" fill="#dc2626">gpios=&lt;&amp;pioA 27 1&gt;</text>
+    <rect x="30" y="262" width="620" height="30" rx="8" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="340" y="282" text-anchor="middle" font-size="11.5" fill="#3730a3">pioA 是地基(芯片级, 写一次全板共用)；leds 是需求(随便加 red/blue)。一个资源可被多个用法引用。</text>
+  </svg>
+
+  <p>类比：<strong>pioA 是小区配电箱（物业）</strong>——只负责"我这儿有 32 根线，每根怎么通断、寄存器在哪，我都清楚"，它根本不知道哪根线被你拿去当"客厅灯"；<strong>leds 是你的装修方案</strong>——只说"客厅灯用第 27 根线、低电平亮，逻辑名叫 red"，它不关心第 27 根线在硬件上怎么翻电平。两者靠 <code>gpios = &lt;&amp;pioA 27 1&gt;</code> 这条<strong>引用线</strong>接上：方案说"我要配电箱第 27 根线"，物业把那根线交出来。</p>
+
+  <table>
+    <thead><tr><th>假设</th><th>出什么问题</th></tr></thead>
+    <tbody>
+      <tr><td>只有 leds、没有 pioA</td><td>内核不认识"第 27 根线"是能翻电平的 GPIO，<code>&amp;pioA</code> 引用失败，灯建不出来</td></tr>
+      <tr><td>只有 pioA、没有 leds</td><td>硬件能被操作，但没有任何"red 灯"的逻辑概念，sysfs 里不会出现 <code>/sys/class/leds/red/</code></td></tr>
+      <tr><td>两段分开 ✅</td><td>pioA 定义"资源存在且可用"（芯片级，写一次全板共用）；leds 定义"把资源用作什么设备"（按需求随便加 red/blue/按键）</td></tr>
+    </tbody>
+  </table>
+  <p><strong>本质：pioA 是"资源"，leds 是"用法"。一个资源（pioA）可以被多个用法（red、blue、将来还有个按键）同时引用。</strong>你写 <code>led_blink.c</code> 操作的 <code>red</code>，就是 leds 段给那根线起的<strong>逻辑名</strong>；你平时不用碰 pioA——它已在 BSP 里把"第 27 根线"准备好，你只写 leds 那一段。</p>
+
+  <h4>二、为什么 DTS 只写几行，<code>/sys/class/leds/red/</code> 却多出一堆文件？</h4>
+  <p>你 DTS 写的 4 个属性（<code>compatible</code> / <code>label</code> / <code>gpios</code> / <code>default-state</code>）只是"身份声明"；<code>brightness</code> / <code>trigger</code> / <code>max_brightness</code> 这些文件是内核 <strong>LED 子系统框架（<code>drivers/leds/led-class.c</code>）统一给你加的"标配"</strong>，跟你 DTS 写了多少无关。</p>
+
+  <svg viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg" font-family="PingFang SC, Microsoft YaHei, sans-serif">
+    <rect x="0" y="0" width="680" height="380" fill="#f5f7fa"/>
+    <text x="340" y="26" text-anchor="middle" font-size="15" font-weight="bold" fill="#1f2937">DTS 只写 4 个属性，为什么 sysfs 多出 10+ 文件？</text>
+    <defs>
+      <marker id="arr13d" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#7c3aed"/>
+      </marker>
+    </defs>
+    <rect x="22" y="50" width="200" height="295" rx="10" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+    <text x="122" y="74" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e40af">DTS 你写的（4 个）</text>
+    <text x="36" y="100" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#b91c1c">compatible="gpio-leds"</text>
+    <text x="36" y="120" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#b91c1c">label = "red"</text>
+    <text x="36" y="140" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#b91c1c">gpios=&lt;&amp;pioA 27 1&gt;</text>
+    <text x="36" y="160" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#b91c1c">default-state="off"</text>
+    <text x="36" y="192" font-size="10" fill="#374151">只描述"身份"：</text>
+    <text x="46" y="210" font-size="10" fill="#374151">• 归哪个驱动管</text>
+    <text x="46" y="228" font-size="10" fill="#374151">• 叫什么名字</text>
+    <text x="46" y="246" font-size="10" fill="#374151">• 用哪根脚</text>
+    <text x="46" y="264" font-size="10" fill="#374151">• 开机什么状态</text>
+    <rect x="250" y="50" width="180" height="295" rx="10" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
+    <text x="340" y="74" text-anchor="middle" font-size="12" font-weight="bold" fill="#b91c1c">LED 子系统补的</text>
+    <text x="340" y="94" text-anchor="middle" font-size="9" fill="#6b7280">led-class.c 框架</text>
+    <text x="262" y="120" font-size="10" fill="#374151">led_classdev_register()</text>
+    <text x="262" y="138" font-size="10" fill="#374151">挂一组"标配属性"：</text>
+    <text x="262" y="162" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#166534">brightness</text>
+    <text x="262" y="182" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#166534">max_brightness</text>
+    <text x="262" y="202" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#166534">trigger</text>
+    <text x="262" y="222" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#166534">uevent</text>
+    <text x="262" y="242" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#166534">power/</text>
+    <text x="262" y="264" font-size="10" fill="#9a3412">→ 所有 LED 通用</text>
+    <rect x="458" y="50" width="200" height="295" rx="10" fill="#ffffff" stroke="#16a34a" stroke-width="2"/>
+    <text x="558" y="74" text-anchor="middle" font-size="12" font-weight="bold" fill="#166534">你看到的 sysfs</text>
+    <text x="470" y="100" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#374151">/sys/class/leds/red/</text>
+    <text x="470" y="122" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#16a34a">├ brightness   框架</text>
+    <text x="470" y="142" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#16a34a">├ max_brightness</text>
+    <text x="470" y="162" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#16a34a">├ trigger</text>
+    <text x="470" y="182" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#16a34a">├ uevent</text>
+    <text x="470" y="202" font-family="Menlo,Consolas,monospace" font-size="9.5" fill="#16a34a">├ power/</text>
+    <text x="470" y="226" font-size="9.5" fill="#b91c1c">↑ 框架加的</text>
+    <text x="470" y="252" font-size="9.5" fill="#374151">label="red" → 目录名</text>
+    <text x="470" y="270" font-size="9.5" fill="#374151">gpios → 内部连线</text>
+    <rect x="30" y="358" width="620" height="18" rx="6" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1"/>
+    <text x="340" y="371" text-anchor="middle" font-size="10.5" fill="#3730a3">DTS 是身份声明；LED 子系统是通用模板——底层硬件变，应用接口不变。</text>
+  </svg>
+
+  <p>内核里有一个<strong>通用的 LED 子系统框架</strong>，在 <code>led_classdev_register()</code> 里挂上一组静态属性 <code>led_class_attrs</code>：</p>
+  <pre style="background:#1e1e1e;color:#e6e6e6;padding:10px;border-radius:6px;overflow:auto;font-family:Menlo,Consolas,monospace;font-size:13px;">// drivers/leds/led-class.c（精简）
+static struct attribute *led_class_attrs[] = {
+    &amp;dev_attr_brightness.attr,    // 写它就点灯
+    &amp;dev_attr_max_brightness.attr,// 只读，亮度上限（cat 看是 255）
+    &amp;dev_attr_trigger.attr,       // 选触发方式（timer/heartbeat/none…）
+    &amp;dev_attr_uevent.attr,         // 热插拔事件
+    // 还有 power/…
+    NULL,
+};</pre>
+
+  <table>
+    <thead><tr><th>谁负责</th><th>提供什么</th><th>例子</th></tr></thead>
+    <tbody>
+      <tr><td><strong>DTS（你写）</strong></td><td>"身份"：叫啥、归谁、用哪根脚、开机状态</td><td><code>label="red"</code> / <code>gpios=&lt;&amp;pioA 27 1&gt;</code></td></tr>
+      <tr><td><strong>LED 子系统（内核通用）</strong></td><td>"通用接口"：任何 LED 都该有的功能文件</td><td><code>brightness</code> / <code>trigger</code> / <code>max_brightness</code></td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>为什么这么设计？</strong>避免每个 LED 驱动各写各的 sysfs 文件。gpio-leds、pwm-leds、i2c-leds 都注册进同一个框架，于是 <code>brightness</code> 文件始终在那儿——你写的 <code>led_blink.c</code> 一行不改就能适配任何 LED 硬件。这正是内核"子系统 + 框架"的威力：<strong>底层硬件千变万化，应用接口始终如一</strong>。</p>
+  <p>串回 13.2a：probe 流程图的最后一步 <code>led_classdev_register()</code> 就是这些框架属性的"诞生时刻"——这一行之前 <code>red</code> 什么都没有，之后 <code>brightness</code>/<code>trigger</code>/<code>max_brightness</code> 一次性全到位。</p>
 
   <!-- 13.3 LED 设备树实例 -->
   <h3 id="s13-3">13.3 LED 设备树实例：从 DTS 到点灯</h3>
