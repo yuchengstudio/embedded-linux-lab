@@ -3854,6 +3854,21 @@ pioA: gpio@fc038000 {                 /* ← pioA 是一个 GPIO 控制器节点
     #gpio-cells = &lt;2&gt;;                /* 引用我时用 2 个 cell 描述一个脚 */
     reg = &lt;0xfc038000 0x200&gt;;
 };</pre>
+      <details style="margin:10px 0;background:rgba(255,249,230,0.6);border-left:4px solid #E0A33E;border-radius:6px;padding:0 14px;">
+        <summary style="cursor:pointer;font-weight:bold;padding:12px 0;color:#7A5200;">📖 逐行解读这段设备树（🎯 = 重点关注）</summary>
+        <div style="padding-bottom:12px;font-size:13px;line-height:1.7;">
+          <p><code>leds {</code> — 开一个节点，节点名 <code>leds</code>，是"一组 LED 设备"的父容器，只做分组 + 提供 compatible。</p>
+          <p>🎯 <code>compatible = "gpio-leds";</code> — <strong>最核心的一行</strong>。设备树靠 compatible 字符串匹配驱动；gpio-leds 驱动的 of_match_table 认这个字符串，对上就调 probe（13.2a 第①步"驱动先报名"）。</p>
+          <p>🎯 <code>red { gpios = &lt;&amp;pioA 27 1&gt;; };</code> — 具体 LED 子节点。<code>gpios</code> 是 GPIO 约定属性（名字后缀被 gpiolib 识别）；<code>&amp;pioA</code> 引用下面 pioA 标签，<code>27</code> 引脚号，<code>1</code> flags。这就是"逻辑灯 → 物理脚"的引用入口。</p>
+          <p><code>};</code> — 闭合 leds 节点。</p>
+          <p><code>pioA: gpio@fc038000 {</code> — 开 GPIO 控制器节点。<code>pioA:</code> 是标签（外号）供 <code>&amp;pioA</code> 引用；<code>@fc038000</code> 是寄存器单元地址，区分多个同名 gpio 控制器。</p>
+          <p><code>compatible = "atmel,sama5d2-gpio";</code> — 匹配 Atmel PIO 驱动，probe 后把 pioA 各脚登记进 gpiolib（13.2a 第②步"建台账"）。</p>
+          <p>🎯 <code>gpio-controller;</code> — 布尔属性，声明"我是 GPIO 控制器"。只有带它，gpiolib 才把本节点当 gpio_chip 接管，gpio-leds 才能找到控制器。</p>
+          <p>🎯 <code>#gpio-cells = &lt;2&gt;;</code> — 规定引用本控制器时每个脚用 2 个 cell（引脚号 + flags）。所以 <code>&lt;&amp;pioA 27 1&gt;</code> 才被理解为两个数；若是 &lt;3&gt; 就得写三个数。</p>
+          <p><code>reg = &lt;0xfc038000 0x200&gt;;</code> — 寄存器地址映射：基地址 0xFC038000，长度 0x200。驱动 ioremap 后写 SODR/CODR/OER 翻电平（13.4 最底层硬件）。</p>
+          <p><code>};</code> — 闭合 pioA 节点。</p>
+        </div>
+      </details>
       <ul>
         <li><code>&amp;pioA</code>：<strong>phandle</strong>（指针），相当于"通讯录里 A 公司的电话号"。</li>
         <li><code>27</code>：specifier 第 1 个 cell，按 <code>#gpio-cells = &lt;2&gt;</code> 表示 <strong>pioA 内部的第 27 号引脚</strong>（= 物理 GPIO A27）。</li>
