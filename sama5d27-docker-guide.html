@@ -4213,6 +4213,66 @@ static struct attribute *led_class_attrs[] = {
     </defs>
   </svg>
 
+  <details class="deep-dive">
+    <summary>🔍 为什么必须 fflush？—— 用户态内存 → 内核 → 硬件 三层</summary>
+    <p>你做 LED 实验时把 <code>fflush(f)</code> 写成注释，灯就不闪——根因就是漏了"把数据从用户态内存交还给内核"这一步。上面 6 层图的第 1 层（Shell）其实还藏着一个缓冲细节，画出来才完整：</p>
+    <svg viewBox="0 0 680 400" style="width:100%;max-width:680px;margin:16px auto;display:block;" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="680" height="400" fill="#f8faf9" rx="12"/>
+
+      <!-- 用户空间带 -->
+      <rect x="20" y="20" width="640" height="150" rx="8" fill="#e7f0ff" stroke="#9bbce0" stroke-width="1.5"/>
+      <text x="36" y="42" font-size="12" font-weight="bold" fill="#2c4a6e">用户空间（你的进程）</text>
+
+      <rect x="50" y="55" width="280" height="40" rx="6" fill="#ffffff" stroke="#999" stroke-width="1"/>
+      <text x="190" y="80" text-anchor="middle" font-size="11" font-family="monospace" fill="#444">fprintf(f, "255\n")</text>
+
+      <rect x="50" y="108" width="280" height="48" rx="6" fill="#fff4d6" stroke="#d4b540" stroke-width="1.5"/>
+      <text x="190" y="128" text-anchor="middle" font-size="11" fill="#8a7a20">stdio 缓冲区（用户态内存）</text>
+      <text x="190" y="145" text-anchor="middle" font-size="10" fill="#8a7a20">数据还在这，没进内核</text>
+
+      <line x1="190" y1="95" x2="190" y2="108" stroke="#666" stroke-width="1.5" marker-end="url(#arrFF1)"/>
+      <text x="240" y="91" font-size="9.5" fill="#999">写入</text>
+
+      <!-- 内核空间带 -->
+      <rect x="20" y="178" width="640" height="200" rx="8" fill="#eef3ee" stroke="#aaccbb" stroke-width="1.5"/>
+      <text x="36" y="200" font-size="12" font-weight="bold" fill="#2a5a3a">内核空间（自动接管，你不再参与）</text>
+
+      <rect x="50" y="212" width="280" height="40" rx="6" fill="#ffffff" stroke="#999" stroke-width="1"/>
+      <text x="190" y="237" text-anchor="middle" font-size="11" font-family="monospace" fill="#444">fflush → write() 系统调用</text>
+
+      <!-- 内核内链式 -->
+      <rect x="50" y="270" width="110" height="38" rx="6" fill="#d6e8ff" stroke="#6a9fd4" stroke-width="1"/>
+      <text x="105" y="293" text-anchor="middle" font-size="10" fill="#2c4a6e">VFS</text>
+      <rect x="175" y="270" width="110" height="38" rx="6" fill="#d4f0dd" stroke="#4a8a5c" stroke-width="1"/>
+      <text x="230" y="293" text-anchor="middle" font-size="10" fill="#2a5a3a">sysfs</text>
+      <rect x="300" y="270" width="110" height="38" rx="6" fill="#fff9e6" stroke="#d4b540" stroke-width="1"/>
+      <text x="355" y="293" text-anchor="middle" font-size="10" fill="#8a7a20">LED 子系统</text>
+      <rect x="425" y="270" width="110" height="38" rx="6" fill="#f0e6ff" stroke="#9a7ad4" stroke-width="1"/>
+      <text x="480" y="293" text-anchor="middle" font-size="10" fill="#4a2a6e">GPIO 驱动</text>
+      <rect x="555" y="270" width="95" height="38" rx="6" fill="#ffe0e0" stroke="#cc6666" stroke-width="1"/>
+      <text x="602" y="293" text-anchor="middle" font-size="10" fill="#8a3333">硬件</text>
+      <line x1="160" y1="289" x2="175" y2="289" stroke="#666" stroke-width="1.5" marker-end="url(#arrFF1)"/>
+      <line x1="285" y1="289" x2="300" y2="289" stroke="#666" stroke-width="1.5" marker-end="url(#arrFF1)"/>
+      <line x1="410" y1="289" x2="425" y2="289" stroke="#666" stroke-width="1.5" marker-end="url(#arrFF1)"/>
+      <line x1="535" y1="289" x2="555" y2="289" stroke="#666" stroke-width="1.5" marker-end="url(#arrFF1)"/>
+
+      <text x="340" y="332" text-anchor="middle" font-size="10.5" fill="#4a6a4a">这一串同步自动发生，store 返回时灯已亮 —— 你不用再 fflush 任何东西</text>
+
+      <!-- fflush 大箭头 跨边界 -->
+      <line x1="190" y1="156" x2="190" y2="212" stroke="#cc5544" stroke-width="2.5" marker-end="url(#arrFF1)"/>
+      <text x="205" y="186" font-size="10.5" font-weight="bold" fill="#cc5544">fflush 推这一下（用户态→内核）</text>
+
+      <defs>
+        <marker id="arrFF1" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#666"/>
+        </marker>
+      </defs>
+    </svg>
+    <p><strong>三层链路</strong>：<code>fprintf</code> 先把数据写进<strong>用户态 stdio 缓冲区</strong>（进程自己的内存，跟内核、硬件还隔两层）→ <code>fflush(f)</code> 通过 <code>write()</code> 系统调用把数据<strong>交还给内核</strong> → 内核自动走 VFS→sysfs→LED 子系统→GPIO 驱动→翻寄存器，灯亮。</p>
+    <p><strong>类比</strong>：<code>fprintf</code> = 把便条塞进自己办公桌抽屉（stdio 缓冲）；<code>fflush</code> = 把抽屉里的便条交给公司前台（write 进内核）；前台→各部门→动手改设备 = 内核 sysfs→驱动→硬件（自动发生，你不参与）。</p>
+    <p>所以"fflush 把内存刷到硬件"精确说是：<strong>把用户态内存缓冲刷进内核，内核再负责写到硬件</strong>。fflush 只解决"用户态→内核"这第一跳；进了内核之后那一段是内核同步自动完成的，你没法、也不用再 fflush。漏掉 fflush，便条一直躺抽屉里，前台（内核）不知道你要点灯——这正是当初灯不闪的原因。</p>
+  </details>
+
   <!-- 13.5 VFS 和 sysfs -->
   <h3 id="s13-5">13.5 VFS 和 sysfs 是什么</h3>
 
