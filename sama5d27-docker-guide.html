@@ -2167,11 +2167,19 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
 
     <h4>步骤 9.3：获取内核源码</h4>
     <div class="cmd-block">
-      <div class="label">在 Mac / Docker 里</div>
-      <pre>git clone https://github.com/linux4sam/linux-at91.git
+      <div class="label">Mac 终端：进容器（menuconfig 要交互终端，必须用 -it）</div>
+      <pre>docker exec -it -w /work sama5-dev bash</pre>
+      <div class="label">容器内：装 menuconfig 依赖（若基础的 sama5-build 镜像没带）</div>
+      <pre>apt-get update &amp;&amp; apt-get install -y libncurses-dev flex bison libssl-dev bc</pre>
+      <div class="label">容器内：拉源码（放 /work，Mac 可见，方便你改 DTS）</div>
+      <pre>cd /work
+git clone https://github.com/linux4sam/linux-at91.git
 cd linux-at91
-git checkout linux4sam-2024.04     # 选与你板子烧录镜像同版本的 tag（uname -r 能看出版本线索）
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig</pre>
+git checkout linux4sam-2024.04     # 与板子烧录镜像同版本（uname -r 看线索）
+make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig</pre>
+    </div>
+    <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
+      <strong>🎯 编译产物放容器地盘，避开 /work 权限坑。</strong> 内核编译会在树里写大量 <code>.o</code>/<code>.config</code> 并给脚本打可执行位；而 <code>/work</code> 是 Mac 挂载目录，容器无权 <code>chmod</code>，可能报 <code>Operation not permitted</code>。用 <code>O=/root/kbuild</code> 把所有产物隔离到容器自己的 <code>/root</code>，源码留在 <code>/work</code> 只读不受影响。下面所有 <code>make</code> 都带这个 <code>O=</code> 参数（和 Buildroot 的 <code>O=/root/br-out</code> 一个思路）。
     </div>
 
     <h4>步骤 9.4：把 9.2 的片段贴进板子 DTS</h4>
@@ -2179,36 +2187,41 @@ make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig</pre>
 
     <h4>步骤 9.5：menuconfig 开驱动</h4>
     <div class="cmd-block">
-      <div class="label">在 Mac / Docker 里</div>
-      <pre>make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- menuconfig
+      <div class="label">容器内（已用 -it 进容器）：menuconfig 必须交互终端才能渲染</div>
+      <pre>make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- menuconfig
 # 进 Device Drivers → Networking support → CAN Bus subsystem → CAN Device Drivers
 #   → SPI CAN Controllers → Microchip MCP251xFD SPI CAN controller
-# 选 M（模块）或 *（编进内核），保存退出</pre>
+# 选 M（模块）或 *（编进内核），保存退出
+# 若报 ncurses / curses 相关错误：apt-get install -y libncurses-dev 后重试</pre>
     </div>
 
     <h4>步骤 9.6：编译 dtb 与模块</h4>
     <div class="cmd-block">
       <div class="label">在 Mac / Docker 里（docker 里可 docker exec -w /work sama5-dev bash -c '...'）</div>
-      <pre>make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) dtbs
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) modules</pre>
+      <pre>make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) dtbs
+make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) modules</pre>
     </div>
     <div class="cmd-explain">
       <ul>
-        <li>产物 dtb：<code>arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dtb</code></li>
-        <li>产物 ko：<code>drivers/net/can/spi/mcp251xfd/mcp251xfd.ko</code></li>
+        <li>产物 dtb：<code>/root/kbuild/arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dtb</code></li>
+        <li>产物 ko：<code>/root/kbuild/drivers/net/can/spi/mcp251xfd/mcp251xfd.ko</code></li>
       </ul>
     </div>
 
     <h4>步骤 9.7：上板部署</h4>
     <div class="cmd-block">
       <div class="label">在 Mac 终端执行（需板子 root 密码）</div>
-      <pre># 1) 换设备树（先备份旧的！）
+      <pre># 0) 产物在容器地盘 /root/kbuild，Mac 直接看不到，先 docker cp 到 Mac 可见的 /work
+docker exec sama5-dev cp /root/kbuild/arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dtb /work/
+docker exec sama5-dev cp /root/kbuild/drivers/net/can/spi/mcp251xfd/mcp251xfd.ko /work/
+
+# 1) 换设备树（先备份旧的！）
 ssh root@192.168.2.10 'cp /boot/dtbs/at91-sama5d27_som1_ek.dtb /boot/dtbs/at91-sama5d27_som1_ek.dtb.bak'
-scp arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dtb \
+scp /work/at91-sama5d27_som1_ek.dtb \
     root@192.168.2.10:/boot/dtbs/at91-sama5d27_som1_ek.dtb
 
 # 2) 拷驱动模块（若编成 =m）
-scp drivers/net/can/spi/mcp251xfd/mcp251xfd.ko \
+scp /work/mcp251xfd.ko \
     root@192.168.2.10:/lib/modules/$(ssh root@192.168.2.10 'uname -r')/kernel/drivers/net/can/spi/
 
 # 3) 刷模块依赖并加载（若编成 =y 这步可省，开机自动有）
