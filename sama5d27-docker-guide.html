@@ -3632,6 +3632,174 @@ cat /etc/init.d/rcS</pre>
 
   <p>验证这个过程：在板子上跑 <code>dmesg | grep mmcblk0</code>，你会看到类似 <code>mmcblk0: p1 p2</code>，就是内核发现并创建的 2 个分区。</p>
 
+  <!-- 13.2a LED 驱动创建（设备树路径） -->
+  <h3>13.2a 另一种创建设备节点的路径：设备树 → LED 驱动</h3>
+
+  <p>13.2 讲的是<strong>块设备（SD 卡）</strong>靠读磁盘第 0 扇区的 MBR 分区表来创建 <code>/dev/mmcblk*</code> 节点。LED 这类"板级外设"走的是<strong>另一条路</strong>：硬件信息不是藏在磁盘里，而是写在<strong>设备树 DTS</strong> 里；内核加载对应的 <strong>gpio-leds 驱动</strong>，由驱动在 sysfs 下建 <code>/sys/class/leds/&lt;名&gt;/</code>。下面把"LED 驱动到底怎么创建出来"拆成四段。</p>
+
+  <p style="margin:10px 0 4px;font-size:13.5px;font-weight:bold;color:#1c3f73;font-family:PingFang SC, sans-serif;">图：LED 驱动创建全过程（设备树 → probe → /sys/class/leds）</p>
+  <svg viewBox="0 0 680 596" style="width:100%;max-width:680px;margin:8px auto 16px;display:block;" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arr13a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </marker>
+    </defs>
+    <g>
+      <rect x="170" y="40" width="340" height="56" rx="8" fill="#FAEEDA" stroke="#BA7517" stroke-width="0.5"/>
+      <text x="340" y="62" text-anchor="middle" dominant-baseline="central" font-family="PingFang SC, sans-serif" font-size="14" font-weight="500" fill="#412402">设备树 DTS</text>
+      <text x="340" y="82" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#633806">leds{compatible=gpio-leds}</text>
+    </g>
+    <line x1="340" y1="98" x2="340" y2="134" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arr13a)"/>
+    <g>
+      <rect x="170" y="136" width="340" height="56" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+      <text x="340" y="158" text-anchor="middle" dominant-baseline="central" font-family="PingFang SC, sans-serif" font-size="14" font-weight="500" fill="#042C53">内核解析 DTS</text>
+      <text x="340" y="178" text-anchor="middle" dominant-baseline="central" font-family="PingFang SC, sans-serif" font-size="12" fill="#0C447C">创建 platform_device</text>
+    </g>
+    <line x1="340" y1="194" x2="340" y2="230" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arr13a)"/>
+    <g>
+      <rect x="170" y="232" width="340" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+      <text x="340" y="254" text-anchor="middle" dominant-baseline="central" font-family="PingFang SC, sans-serif" font-size="14" font-weight="500" fill="#26215C">gpio-leds 驱动已注册</text>
+      <text x="340" y="274" text-anchor="middle" dominant-baseline="central" font-family="PingFang SC, sans-serif" font-size="12" fill="#3C3489">platform_driver + of_match</text>
+    </g>
+    <line x1="340" y1="290" x2="340" y2="326" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arr13a)"/>
+    <g>
+      <rect x="170" y="328" width="340" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+      <text x="340" y="350" text-anchor="middle" dominant-baseline="central" font-family="PingFang SC, sans-serif" font-size="14" font-weight="500" fill="#04342C">platform bus 匹配</text>
+      <text x="340" y="370" text-anchor="middle" dominant-baseline="central" font-family="PingFang SC, sans-serif" font-size="12" fill="#085041">compatible 一致 调用 probe()</text>
+    </g>
+    <line x1="340" y1="386" x2="340" y2="422" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arr13a)"/>
+    <g>
+      <rect x="170" y="424" width="340" height="56" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+      <text x="340" y="446" text-anchor="middle" dominant-baseline="central" font-family="PingFang SC, sans-serif" font-size="14" font-weight="500" fill="#4A1B0C">probe() 遍历每个 LED</text>
+      <text x="340" y="466" text-anchor="middle" dominant-baseline="central" font-family="PingFang SC, sans-serif" font-size="12" fill="#712B13">申请 GPIO 输出 + 设回调</text>
+    </g>
+    <line x1="340" y1="482" x2="340" y2="518" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arr13a)"/>
+    <g>
+      <rect x="170" y="520" width="340" height="56" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+      <text x="340" y="542" text-anchor="middle" dominant-baseline="central" font-family="PingFang SC, sans-serif" font-size="14" font-weight="500" fill="#173404">led_classdev_register()</text>
+      <text x="340" y="562" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="12" fill="#27500A">生成 /sys/class/leds/red/</text>
+    </g>
+  </svg>
+
+  <p>注意区分：<strong>gpio-leds 驱动是跑在内核里的模块</strong>，不是你之前写的 <code>led_blink.c</code>（用户态程序）。它的"创建"分两大段——<strong>驱动先注册自己</strong>，再<strong>等硬件信息（设备树）对上号，才逐个建 LED 设备</strong>。</p>
+
+  <h4 style="font-size:14px;margin:18px 0 8px;color:#274d33;font-family:PingFang SC, sans-serif;">阶段一：驱动先"报名"（注册）</h4>
+
+  <p>内核编译时（Buildroot 里选了 <code>LEDS_GPIO</code>），gpio-leds 驱动就被编进内核（或编成模块 <code>leds-gpio.ko</code>）。它本质是一个 <strong>platform driver</strong>，最关键的是这张"匹配表"：</p>
+
+  <div class="cmd-block">
+    <div class="label">内核驱动 · gpio-leds 注册（简化）</div>
+    <pre>static const struct of_device_id of_gpio_leds_match[] = {
+    { .compatible = "gpio-leds", },
+    { },
+};
+
+static struct platform_driver gpio_led_driver = {
+    .probe  = gpio_led_probe,        /* 对上号后调这个函数 */
+    .driver = {
+        .name  = "leds-gpio",
+        .of_match_table = of_gpio_leds_match,
+    },
+};
+module_platform_driver(gpio_led_driver);   /* 注册进内核 */</pre>
+  </div>
+
+  <p><code>module_platform_driver(...)</code> 一执行，驱动就"报名"说自己能处理 <code>compatible = "gpio-leds"</code> 的设备。此时它<strong>还没干任何实事</strong>，只是在内核的驱动列表里挂了号。</p>
+
+  <h4 style="font-size:14px;margin:18px 0 8px;color:#274d33;font-family:PingFang SC, sans-serif;">阶段二、三：设备树节点 → platform_device → 总线匹配</h4>
+
+  <p>内核启动解析 DTB，发现 DTS 里有 <code>leds { compatible = "gpio-leds"; ... }</code>，就为这个节点生成一个 <strong>platform_device</strong>（内核里代表"一个硬件设备"的结构体），把 <code>compatible</code> 和子节点信息塞进去。随后 platform 总线把刚生成的 device 和已注册的 driver 做匹配：比对 <code>compatible</code> 字符串，一致 → 内核自动调用驱动的 <strong>probe()</strong>。</p>
+
+  <h4 style="font-size:14px;margin:18px 0 8px;color:#274d33;font-family:PingFang SC, sans-serif;">阶段四：probe 里为每个 LED 建"类设备"（核心）</h4>
+
+  <p><code>gpio_led_probe()</code> 做的事，简化成你能懂的伪代码：</p>
+
+  <div class="cmd-block">
+    <div class="label">内核驱动 · gpio_led_probe()（简化伪代码）</div>
+    <pre>static int gpio_led_probe(struct platform_device *pdev)
+{
+    for_each_child_of_node(pdev->dev.of_node, child) {
+        struct gpio_led_data *led = devm_kzalloc(...);
+
+        /* ① 读 gpios 属性，向 GPIO 子系统申请该脚、设为输出 */
+        led->gpiod = devm_get_gpiod_from_child(dev, NULL, child);
+        gpiod_direction_output(led->gpiod, 0);
+
+        /* ② 读 label（没有就用节点名 "red"）作为 LED 名字 */
+        led->cdev.name = of_get_property(child, "label", NULL) ?: child->name;
+
+        /* ③ 把"怎么改亮度"的函数指针挂上去 */
+        led->cdev.brightness_set = gpio_led_set;
+
+        /* ④ 注册进 LED 子系统 → 在 /sys/class/leds/ 下建目录+属性文件 */
+        led_classdev_register(&pdev->dev, &led->cdev);
+    }
+    return 0;
+}</pre>
+  </div>
+
+  <p>第 ④ 步的 <code>led_classdev_register()</code> 才真正让"LED 设备"存在——它在 <code>/sys/class/leds/</code> 下创建 <code>red/</code> 目录，并生成 <code>brightness</code>、<code>max_brightness</code>、<code>trigger</code> 几个属性文件。而第 ③ 步挂上去的 <code>gpio_led_set()</code> 回调，里面只有一句真正干活的话：</p>
+
+  <div class="cmd-block">
+    <div class="label">内核驱动 · 真正翻转电平的回调</div>
+    <pre>static void gpio_led_set(struct led_classdev *cdev, enum led_brightness value)
+{
+    struct gpio_led_data *led = cdev_to_gpio_led_data(cdev);
+    gpiod_set_value(led->gpiod, value ? 1 : 0);  /* ← 翻转 GPIO 物理电平 */
+}</pre>
+  </div>
+
+  <h4 style="font-size:14px;margin:18px 0 8px;color:#274d33;font-family:PingFang SC, sans-serif;">串起来：你 echo 255 时发生了什么</h4>
+
+  <p>这正好接上 13.4 的六层链路，现在你看清了"驱动层"具体是谁在动：</p>
+
+  <div class="cmd-block">
+    <div class="label">你 echo 255 时，内核里发生的事</div>
+    <pre>echo 255 > /sys/class/leds/red/brightness
+   │  (sysfs 属性写)
+   ▼
+led_brightness_store()              ← LED 子系统
+   ▼
+cdev->brightness_set(cdev, 255)     ← 调用 probe 里挂的 gpio_led_set
+   ▼
+gpiod_set_value(gpiod, 1)           ← GPIO 子系统
+   ▼
+PIOA 控制器写寄存器                  ← 硬件：灯亮</pre>
+  </div>
+
+  <p>你写的 <code>led_blink.c</code> 只是在最顶上"写文件"，真正的"翻电平"是 <code>gpio_led_set</code> 这一行。</p>
+
+  <h4 style="font-size:14px;margin:18px 0 8px;color:#274d33;font-family:PingFang SC, sans-serif;">与 13.2 的 MBR 路径对照</h4>
+
+  <table style="border-collapse:collapse;width:100%;margin:8px 0 14px;font-size:13px;font-family:PingFang SC, sans-serif;">
+    <tr style="background:#f0f7f2;">
+      <th style="border:1px solid #cfe0d5;padding:6px 8px;text-align:left;">维度</th>
+      <th style="border:1px solid #cfe0d5;padding:6px 8px;text-align:left;">13.2 mmcblk0p1</th>
+      <th style="border:1px solid #cfe0d5;padding:6px 8px;text-align:left;">LED 设备</th>
+    </tr>
+    <tr>
+      <td style="border:1px solid #e0e0e0;padding:6px 8px;">硬件信息从哪来</td>
+      <td style="border:1px solid #e0e0e0;padding:6px 8px;">磁盘第 0 扇区 MBR 分区表（硬件自带）</td>
+      <td style="border:1px solid #e0e0e0;padding:6px 8px;">设备树 DTS（人写的描述）</td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #e0e0e0;padding:6px 8px;">驱动怎么"发现"设备</td>
+      <td style="border:1px solid #e0e0e0;padding:6px 8px;">驱动读磁盘 → 自己解析分区</td>
+      <td style="border:1px solid #e0e0e0;padding:6px 8px;">总线比对 compatible 字符串 → 调 probe</td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #e0e0e0;padding:6px 8px;">谁建接口</td>
+      <td style="border:1px solid #e0e0e0;padding:6px 8px;">devtmpfs 建 /dev 节点</td>
+      <td style="border:1px solid #e0e0e0;padding:6px 8px;">led_classdev_register 建 /sys/class/leds/ 目录</td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #e0e0e0;padding:6px 8px;">共同点</td>
+      <td style="border:1px solid #e0e0e0;padding:6px 8px;" colspan="2">都是"驱动注册 + 拿到硬件信息 + 在某个文件系统露出接口"</td>
+    </tr>
+  </table>
+
+  <p>一句话收口：<strong>13.2 是"驱动读硬件自己的元数据"，LED 是"驱动读人写的设备树、再逐个建类设备"</strong>——机制不同，但套路一致。下一节（13.3）就从这棵设备树节点出发，看内核逐行如何把它变成能点亮的灯。</p>
+
   <!-- 13.3 LED 设备树实例 -->
   <h3>13.3 LED 设备树实例：从 DTS 到点灯</h3>
 
