@@ -4243,7 +4243,7 @@ static struct attribute *led_class_attrs[] = {
 
     <!-- 边界虚线 -->
     <line x1="20" y1="186" x2="660" y2="186" stroke="#cc5544" stroke-width="1.5" stroke-dasharray="6 4"/>
-    <text x="340" y="179" text-anchor="middle" font-size="9.5" font-weight="bold" fill="#cc5544">⚠ 用户态 / 内核态 边界 —— 只有「系统调用」能穿过，fflush 过不去</text>
+    <text x="650" y="180" text-anchor="end" font-size="9.5" font-weight="bold" fill="#cc5544">⚠ 边界：只有系统调用能穿过，fflush 过不去</text>
 
     <!-- 内核空间带 -->
     <rect x="20" y="196" width="640" height="218" rx="8" fill="#eef3ee" stroke="#aaccbb" stroke-width="1.5"/>
@@ -4272,7 +4272,7 @@ static struct attribute *led_class_attrs[] = {
 
     <!-- 大箭头：fflush 调用 write 穿过边界（起点在用户态 fflush 框，落点在内核态 write 框） -->
     <line x1="506" y1="134" x2="195" y2="228" stroke="#cc5544" stroke-width="2.5" marker-end="url(#arrFF1)"/>
-    <text x="300" y="174" font-size="10.5" font-weight="bold" fill="#cc5544">fflush 调用 write() → 穿过边界的是 write()，不是 fflush</text>
+    <text x="200" y="162" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#cc5544">fflush 调用 write() → 穿过边界的是 write()，不是 fflush</text>
 
     <defs>
       <marker id="arrFF1" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
