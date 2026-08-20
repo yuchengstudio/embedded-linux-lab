@@ -2370,6 +2370,16 @@ git tag | grep 2021.10             # 先列出匹配的 tag，确认精确名（
 git checkout linux4microchip-2021.10   # 必须 = 板子 uname -r！否则编出的 .ko vermagic 不符，板子拒载
 #   ↑ 绝不要照抄成 2024.04 等别的版本；版本不一致 = vermagic 不匹配 = modprobe 失败
 git status                     # 看有没有未提交本地改动，必要时 git stash 收起</pre>
+      <div class="tip" style="background:rgba(255,249,230,0.7);border-left:4px solid #FAC775;">
+        ⏳ <strong>checkout 可能很慢，别慌也别 Ctrl-C。</strong> 容器源码默认停在 2023.10、板子是 2021.10，相差两年，git 要重写整个工作树（数万文件）；而 <code>/work</code> 是 Mac 挂载目录，逐文件写比容器本地磁盘慢很多，叠起来要等几分钟到十几分钟。出现 <code>HEAD is now at ...</code> 即成功。<strong>若经常切版本，建议把工作副本放到容器本地目录</strong>（见下方「容器本地工作副本」提示），能快一个量级。
+      </div>
+      <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
+        <strong>🗂️ 容器本地工作副本（checkout 太慢时的快法）：</strong> 不必在 <code>/work</code> 挂载目录上 checkout。可直接把目标 tag 解包到容器本地磁盘（原生速度，省掉逐文件比对）：
+        <pre style="margin:8px 0 0;">cd /work/linux-at91
+git archive linux4microchip-2021.10 | tar -x -C /root/linux-at91-2021.10
+cd /root/linux-at91-2021.10     # 之后 9.4 改 DTS、9.6 编译都在这个目录；O=/root/kbuild 不变</pre>
+        这样完全避开 <code>/work</code> 挂载的慢写；代价是 Mac 上看不到源码（需编辑时走 <code>docker exec</code> 或 <code>docker cp</code>）。若当前 checkout 已跑完则可忽略此法。
+      </div>
       <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
         <strong>📌 怎么确认「这个内核版本」带 MCP2518FD 驱动？看三层：</strong>
         <ul style="margin:6px 0 0;">
