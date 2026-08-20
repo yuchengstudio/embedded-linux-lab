@@ -2396,6 +2396,9 @@ uname -r                                # 板子内核这边（= 5.10.80-linux4m
 
 
     <h4>步骤 9.3：获取内核源码</h4>
+    <div class="note" style="background:rgba(232,245,233,0.6);border-left:4px solid #7bbf7b;margin:8px 0 14px;">
+      👉 <strong>路线分流提示：</strong> 若你走 <strong>Buildroot 整镜像路线（方案 3，见 <a href="#lv3-p11">步骤 11.1</a>）</strong>，<strong>本步骤整段可跳过</strong>——Buildroot 的 defconfig 会自己拉 <code>linux4microchip-2021.10</code>（= 你板子 <code>uname -r</code>），并<strong>同源编译内核 + 模块</strong>，vermagic 天然一致，<em>不需要你手动 clone / checkout / 对齐内核版本</em>。「把 mcp2518 编进去」在那条路线里只是 <code>make O=/root/br-out linux-menuconfig</code> 里勾一个 <code>CONFIG_CAN_MCP25XXFD</code> 选项。下面这段是<strong>方案 1（手动在内核树重编模块）</strong>才需要的手工活——仅当你明确要单编 .ko 时才照着做。
+    </div>
     <div class="cmd-block">
       <div class="label">Mac 终端：进容器（menuconfig 要交互终端，必须用 -it）</div>
       <pre>docker exec -it -w /work sama5-dev bash</pre>
