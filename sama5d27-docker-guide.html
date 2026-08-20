@@ -2333,6 +2333,27 @@ make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig<
 # 若报 ncurses / curses 相关错误：apt-get install -y libncurses-dev 后重试</pre>
     </div>
 
+    <h4>步骤 9.5b：打开 / 检查 / 直接改 .config（menuconfig 之外的两条路）</h4>
+    <p><code>menuconfig</code> 保存后，真正的"订单"写在 <code>O=/root/kbuild</code> 指定的 <strong><code>/root/kbuild/.config</code></strong> 里（因为用了 <code>O=</code>，不在源码树根目录）。三种"打开它"的方式：</p>
+    <div class="cmd-block">
+      <div class="label">① 只想确认某一项有没有写进去（最常用）</div>
+      <pre>grep CONFIG_CAN_MCP251XFD /root/kbuild/.config
+# 输出 CONFIG_CAN_MCP251XFD=m  → 成功开了模块
+# 没输出 / 显示 =n / 被 # 注释掉 → 没开</pre>
+      <div class="label">② 用内核自带脚本直接改（不用进 TUI 界面）</div>
+      <pre># 在容器里跑（scripts/config 是内核源码提供的改 .config 小工具）
+cd /root/kbuild
+/work/linux-at91/scripts/config --file /root/kbuild/.config --module CONFIG_CAN_MCP251XFD
+/work/linux-at91/scripts/config --file /root/kbuild/.config --enable CONFIG_CAN
+# --module =m  --enable =y  --disable =n</pre>
+      <div class="label">③ 用编辑器直接看 / 手动改整份</div>
+      <pre>nano /root/kbuild/.config          # 或 vi /work/linux-at91/.config（若没用 O=）
+# 找到对应行改：CONFIG_CAN_MCP251XFD=m  改完存盘即可</pre>
+    </div>
+    <div class="note" style="background:rgba(255,244,224,0.5);border-left:4px solid #FAC775;">
+      <strong>📂 对应地，板子「正在跑的内核」用的配置在哪看？</strong> 见 <a href="#lv3-p9-env">步骤 9.9</a>：优先 <code>zcat /proc/config.gz</code>（需内核开了 <code>CONFIG_IKCONFIG_PROC</code>）；若没有这个文件，退而看 <code>/boot/config-$(uname -r)</code>。两条都是<strong>出厂/当前内核的 config</strong>，跟你刚才在自己机器上生成的 <code>/root/kbuild/.config</code> 是两回事——前者决定板子现状，后者决定你重编出来的新内核。对比两者就能判断"出厂缺了哪些选项、方案 1 要补哪些"。
+    </div>
+
     <h4>步骤 9.6：编译 dtb 与模块</h4>
     <div class="cmd-block">
       <div class="label">在 Mac / Docker 里（docker 里可 docker exec -w /work sama5-dev bash -c '...'）</div>
@@ -2381,7 +2402,7 @@ ip link show can1        # 能看到 can1 接口 = 驱动已建好网络设备�
     <h3>方案 2：只有出厂镜像，走 DT overlay（不重编内核）</h3>
     <p>适合出厂镜像<strong>已经自带</strong> <code>mcp251xfd.ko</code>、你只想追加一块新硬件。关键是：仍得有<strong>匹配</strong>的驱动模块，否则 overlay 加载了也白搭（见 9.14）。</p>
 
-    <h4>步骤 9.9：先查出厂镜像有没有驱动</h4>
+    <h4 id="lv3-p9-env">步骤 9.9：先查出厂镜像有没有驱动</h4>
     <div class="cmd-block">
       <div class="label">在板子上</div>
       <pre>uname -r
