@@ -2169,7 +2169,15 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
 
     <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
       <strong>📚 概念补充：Kconfig 是什么？（方案 1 你在 menuconfig 里「开选项」到底开了啥）</strong>
-      <p style="font-size:11px;color:#888;margin:-2px 0 8px;">📝 名字拆解：<code>Kconfig</code> = <strong>K</strong>ernel（内核）+ <strong>config</strong>uration（配置），全称「内核配置」系统，跟 keyboard / key 没关系。</p>
+      <div class="note" style="background:rgba(231,240,255,0.55);border-left:4px solid #9bbce0;margin:4px 0 10px;padding:8px 12px;">
+        <p style="margin:0 0 4px;"><strong>📝 名字拆解：<code>Kconfig</code> 全称是 <span style="color:#2c4a6e;">Kernel Configuration（内核配置）</span></strong></p>
+        <ul style="margin:0;padding-left:20px;line-height:1.65;font-size:12px;">
+          <li><strong>K</strong> = <strong>Kernel</strong>（内核），指 Linux 内核本身，<u>不是</u> keyboard，也跟 key（按键）毫无关系；</li>
+          <li><strong>config</strong> = <strong>configuration</strong>（配置），即"可选项设置"；</li>
+          <li>合起来 = <strong>内核的配置系统</strong>：一套用来决定"这份内核源码要编进哪些功能、编成内置 =y 还是模块 =m"的机制。</li>
+        </ul>
+        <p style="margin:4px 0 0;font-size:11px;color:#666;">📌 记忆法：看到 <code>K</code> 就联想 <strong>K</strong>ernel，别联想键盘；这个命名是内核社区"以 K 打头指代 Kernel"的惯例（如 Kbuild、Kmodule）。</p>
+      </div>
       <p><strong>Kconfig 是内核源码树里成千上万个"配置菜单定义文件"</strong>（散落在各子目录，如 <code>drivers/net/can/spi/Kconfig</code>、<code>drivers/spi/Kconfig</code>），用简单语法声明"这个内核支持哪些可选项、叫什么名、依赖谁、默认开不开"。口语说"在 menuconfig 里开 Kconfig 选项"并不严格——<strong>Kconfig 只是只读的菜谱/清单，真正的"你点了哪些菜"记录在根目录的 <code>.config</code> 文件里</strong>（形如 <code>CONFIG_CAN_MCP251XFD=m</code>）。<code>make menuconfig</code> 是把所有 Kconfig 收集起来渲染成图形界面让你勾选的"点餐程序"，勾完保存就往 <code>.config</code> 写对应的 <code>CONFIG_XXX=...</code>。</p>
       <p style="margin:4px 0 6px;"><strong>「Kconfig 系统」其实是这三部分的总称：</strong></p>
       <ul style="margin:0 0 10px;padding-left:22px;line-height:1.7;">
