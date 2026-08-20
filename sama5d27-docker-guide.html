@@ -2303,6 +2303,27 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
     <h3>方案 1：有内核源码树，重编 DT + 驱动（最稳，推荐先走）</h3>
     <p>适合你手上有一份和板子"正在跑的内核"同版本的内核源码。优点是全改、最可控；缺点是编译耗时。</p>
 
+    <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;margin:10px 0;">
+      <p style="margin:0 0 6px;"><strong>📦 Docker 命令拆解（方案 1 全程在容器里编译，这几个要分清）</strong></p>
+      <p style="margin:0 0 4px;"><code>docker exec -it -w /work sama5-dev bash</code> —— 进容器开一个<strong>交互式终端</strong>，逐参数：</p>
+      <ul style="margin:0 0 8px;padding-left:20px;line-height:1.6;font-size:12px;">
+        <li><code>docker</code> —— Docker 客户端命令本身；</li>
+        <li><code>exec</code> —— 在<strong>已经在跑的</strong>容器里执行命令（区别于 <code>docker run</code> 新建容器）；</li>
+        <li><code>-i</code> / <code>--interactive</code> —— 保持标准输入（STDIN）打开，让你能往里敲字；</li>
+        <li><code>-t</code> / <code>--tty</code> —— 分配一个伪终端（TTY），字符界面才会正常渲染；</li>
+        <li><code>-w /work</code> / <code>--workdir</code> —— 进容器后工作目录设为 <code>/work</code>（这是 Mac 本机 <code>~/sama5</code> 挂载进容器的目录，源码放这你 Mac 上能看到、能改）；</li>
+        <li><code>sama5-dev</code> —— 目标容器名（你之前 <code>docker run</code> 起的那个）；</li>
+        <li><code>bash</code> —— 要执行的程序，即开一个 bash shell。连起来 = "进 sama5-dev 容器、在 /work 下给我一个能交互的 bash"。</li>
+      </ul>
+      <p style="margin:0 0 4px;"><strong>为什么 menuconfig 必须带 <code>-it</code>？</strong> <code>make menuconfig</code> 是 ncurses 字符菜单，<u>没有 TTY 就无法渲染</u>，不加 <code>-it</code> 会报错或显示乱码。所以进容器用 <code>-it</code>，而"跑一条就退出"的命令（如 <code>make dtbs</code>、<code>docker cp</code>）不用 <code>-it</code>。</p>
+      <p style="margin:0 0 4px;"><strong>另外两种常用形态：</strong></p>
+      <ul style="margin:0;padding-left:20px;line-height:1.6;font-size:12px;">
+        <li><code>docker exec sama5-dev cp /root/kbuild/... /work/</code> —— 不带 <code>-it</code>，在容器里跑一条 <code>cp</code> 就退出（把编译产物从容器地盘拷到 Mac 可见的 <code>/work</code>）；</li>
+        <li><code>docker exec -w /work sama5-dev bash -c 'make ... dtbs'</code> —— 不带 <code>-it</code>、用 <code>-c '命令串'</code> 在容器里非交互跑一条编译命令（适合 Mac 终端一行敲完，不用先进容器）；</li>
+        <li><code>docker ps</code> —— 先确认容器在跑（看到 <code>sama5-dev</code> 在列表里才行 <code>exec</code>）。</li>
+      </ul>
+    </div>
+
     <h4>步骤 9.3：获取内核源码</h4>
     <div class="cmd-block">
       <div class="label">Mac 终端：进容器（menuconfig 要交互终端，必须用 -it）</div>
