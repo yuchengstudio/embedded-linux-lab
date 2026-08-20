@@ -2756,6 +2756,64 @@ cansend can1 123##1.11.22.33.44</pre>
       <strong>💡 方案 3（更省心）：Buildroot 整镜像路线</strong>
       <p style="margin:6px 0 0;">如果不想纠结 vermagic 与"外部模块塞不进板"，可以直接走 <a href="#lv3-p11">步骤 11.1</a> 的 Buildroot 整镜像：内核 + 模块 + 根文件系统同源编译，vermagic 自动与板子一致。其 defconfig 默认拉 <code>linux4microchip-2021.10</code>（= 你板子 <code>uname -r</code>），板子烧完内核不跳代；若想拿更完整的 CAN FD 特性，可把内核换成 2023.10，但需注意 DTS 路径（<code>microchip/</code> 子目录）、驱动改名（<code>mcp251xfd</code>）、以及"老 Buildroot 配新内核"的组合风险——详见 <a href="#lv3-p11">步骤 11.1</a> 开头三张说明框。</p>
     </div>
+
+    <h4>方案 3 实战：在已烧录镜像上「单独追加」MCP2518FD 驱动（增量重编）</h4>
+    <div class="note" style="background:rgba(232,245,233,0.6);border-left:4px solid #7bbf7b;">
+      <strong>🎯 关键认知：Buildroot 不是「每加一个驱动就重烧整张卡」。</strong> 你 base 镜像已烧好、板子能跑之后，想加 MCP2518 = 只<strong>增量重编内核 + 模块 + dtb</strong>（工具链 / U-Boot / 根文件系统有构建缓存、不重编，比第一次全编快很多），再把新出的 <code>mcp25xxfd.ko</code> 和 <code>*.dtb</code> 拷上板即可。而且增量重编仍是 <strong>2021.10 同源</strong>，vermagic 和你板子正在跑的内核一致 → <code>.ko</code> 上去能直接 <code>modprobe</code>，不存在方案 1 那种"外部模块对不上"的问题。
+    </div>
+    <div class="cmd-block">
+      <div class="label">① 容器内：开 MCP2518FD 驱动（内核 menuconfig，5.10 显示旧名 mcp25xxfd）</div>
+      <pre>cd /work/buildroot-at91
+make O=/root/br-out linux-menuconfig
+#   Device Drivers → Networking support → CAN Bus subsystem
+#     → CAN Device Drivers → SPI CAN Controllers
+#     → Microchip MCP251xFD SPI CAN controller  →  选 M（模块）
+#   ★ 同时确认：CAN Bus subsystem 本身已 = M 或 *（CONFIG_CAN）；SPI 控制器已开（CONFIG_SPI_ATMEL）
+#   ★ 5.10 菜单里名字是 mcp25xxfd（符号 CONFIG_CAN_MCP25XXFD）；别照 6.x 写成 mcp251xfd
+#   保存退出（菜单里 &lt;Save&gt;）</pre>
+    </div>
+    <div class="cmd-block">
+      <div class="label">② 加设备树节点（让驱动能 probe 到板上的芯片）</div>
+      <pre># 方式 A（快，验证用）：直接改 Buildroot 解出来的内核树 in-tree dts
+vi /root/br-out/build/linux-*/arch/arm/boot/dts/at91-sama5d27_som1_ek.dts
+#   在 &spi6（flexcom4 @0xfc018000）下加 MCP2518 节点：INT=PB0、CS=PD0、时钟按板子晶振
+#   （节点内容见下方「DTS 片段」，与方案 1 的 9.4 一致）
+#
+# 方式 B（持久，推荐）：用自定义 dts 覆盖，避免 output/build 被 clean 清掉
+#   把改好的 dts 放 /work/board-dts/at91-sama5d27_som1_ek.dts
+#   make O=/root/br-out linux-menuconfig
+#     Kernel → Custom device tree (DTS) file → 填 /work/board-dts/at91-sama5d27_som1_ek.dts
+#   保存退出</pre>
+    </div>
+    <div class="cmd-block">
+      <div class="label">③ 增量重编（只重编内核+模块+dtb，复用工具链/rootfs 缓存）</div>
+      <pre>make O=/root/br-out linux-rebuild        # 用改后的 .config + dts 重建内核树
+#   或全量 make O=/root/br-out -j$(nproc) 也行——Buildroot 检测内核 config/dts 变了只会重编 linux 包
+#   产物：/root/br-out/images/ 下 zImage、*.dtb 更新；模块在
+#         /root/br-out/build/linux-*/drivers/net/can/spi/mcp25xxfd/mcp25xxfd.ko</pre>
+    </div>
+    <div class="cmd-block">
+      <div class="label">④ 取产物并上板（Mac 终端，板子 IP 192.168.2.10）</div>
+      <pre># 先看板子模块目录到底在哪
+ssh root@192.168.2.10 'uname -r; ls /lib/modules/'
+# 假设输出 5.10.80-linux4microchip-2021.10，则拷模块：
+scp /root/br-out/build/linux-*/drivers/net/can/spi/mcp25xxfd/mcp25xxfd.ko \
+    root@192.168.2.10:/lib/modules/5.10.80-linux4microchip-2021.10/kernel/drivers/net/can/spi/
+# dtb（板子从 SD 卡 boot 分区加载，替换旧的；路径按你板子实际 boot 分区）
+scp /root/br-out/images/at91-sama5d27_som1_ek.dtb root@192.168.2.10:/boot/
+#   ↑ vermagic 一致时 zImage 可不换；若想最稳就连 zImage 一起拷（/root/br-out/images/zImage）</pre>
+    </div>
+    <div class="cmd-block">
+      <div class="label">⑤ 板子上加载验证</div>
+      <pre>depmod -a
+modprobe mcp25xxfd
+dmesg | tail            # 看到 MCP251xFD 相关 successfully initialized / can1 出现即 probe 成功
+ip link set can1 up type can bitrate 500000
+candump can1             # 接上 CAN 总线应有报文</pre>
+    </div>
+    <div class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);">
+      <strong>⚠️ 两点坑：</strong> ① 若你 base 镜像的 <code>sama5_defconfig</code> 连 <code>CONFIG_CAN</code> 都没开，<code>mcp25xxfd</code> 依赖的总线子系统不存在 → 仍需 <code>linux-rebuild</code> 把 CAN 编进内核（上面的 ① 已含此步，重编内核会带上）。② dtb 必须和板子实际硬件接线一致（SPI 总线号、INT/CS 引脚、晶振频率），节点写错驱动 probe 不到或起不来——DTS 片段以方案 1 的 9.4 为准。
+    </div>
   </section>
 
   <div id="lv3-future" class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);margin:12px 0;">
