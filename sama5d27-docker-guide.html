@@ -2350,7 +2350,12 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
           </table>
         </div>
       </div>
-      <div class="label">容器内：准备内核源码（容器已有则可跳过 clone，直接 cd 进去）</div>
+      <div class="label">① 先在板子上确认：板子到底跑哪个版本（这是你 checkout 的目标，必须先看）</div>
+      <pre>uname -r
+#   ↑ 例如输出 5.10.80-linux4microchip-2021.10 —— 记住那个 2021.10
+#     方案 1 编出的 .ko 要能上板，容器源码 checkout 的 tag 必须跟它一致
+#     否则 vermagic 不符，板子 modprobe 直接拒载</pre>
+      <div class="label">② 容器内：准备内核源码（容器已有则可跳过 clone，直接 cd 进去）</div>
       <pre># 仅当容器里还没有 linux-at91 时才需要 clone（几百 MB，很慢，已有就别跑）：
 cd /work
 git clone https://github.com/linux4sam/linux-at91.git
@@ -2359,8 +2364,8 @@ cd linux-at91
 # —— 容器已有源码时，直接进目录即可，上面三行都跳过 ——
 cd /work/linux-at91            # 换成你实际的路径（容器里这份就是你的源码树）
 
-# 核对版本：方案 1 要求源码版本与板子烧录镜像一致
-git describe --tags            # 看当前 HEAD 落在哪个 tag
+# 核对版本：对照板子 uname -r 选 tag——先确认容器源码当前落在哪个 tag，再切到板子同款
+git describe --tags            # 看当前 HEAD 落在哪个 tag（容器源码里）
 git tag | grep 2021.10             # 先列出匹配的 tag，确认精确名（你的板子是 2021.10）
 git checkout linux4microchip-2021.10   # 必须 = 板子 uname -r！否则编出的 .ko vermagic 不符，板子拒载
 #   ↑ 绝不要照抄成 2024.04 等别的版本；版本不一致 = vermagic 不匹配 = modprobe 失败
