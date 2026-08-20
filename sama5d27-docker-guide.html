@@ -2219,6 +2219,7 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
         </svg>
       </div>
       <p>流程：<strong>① Kconfig 文件</strong>（各目录的菜单清单，声明选项/依赖/默认值）→ <strong>② make menuconfig</strong>（图形点餐界面，你设 y/m/n）→ <strong>③ .config</strong>（你的订单，形如 <code>CONFIG_CAN_MCP251XFD=m</code>）→ <strong>④ Makefile / Kbuild</strong>（后厨，按 <code>obj-$(CONFIG_CAN_MCP251XFD) += mcp251xfd.o</code> 这种规则把 <code>mcp251xfd.c</code> 编成 <code>vmlinux</code>(=y) 或 <code>mcp251xfd.ko</code>(=m)）。</p>
+      <p style="font-size:11.5px;color:#9a7ad4;margin:2px 0 0;"><strong>📌 Makefile / Kbuild 是「文件」不是「目录」：</strong>内核里 <u>顶层有一个总 <code>Makefile</code></u>（源码树根目录），<u>每个子目录又各有一个 <code>Makefile</code>（或 <code>Kbuild</code>）文件</u>管自己目录的 <code>.c</code>。构建系统（kbuild）会逐层递归进子目录、读每个目录里的这个文件来编译。比如 <code>drivers/net/can/spi/mcp251xfd/</code> 是个目录，里面既有 <code>mcp251xfd-core.c</code> 等源码，也有一个 <code>Makefile</code> 文件（含 <code>obj-$(CONFIG_CAN_MCP251XFD) += mcp251xfd.o</code>）。<strong>构建是按目录推进、逐目录读 Makefile，但 Makefile 本身是文件，不是目录。</strong></p>
     </div>
     <div class="table-wrap">
       <table>
