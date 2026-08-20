@@ -2038,7 +2038,7 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
 
     <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
       <strong>📚 概念补充：什么叫「Linux 主线内核（mainline kernel）」？</strong>
-      <p><strong>主线内核 = Linus Torvalds 亲自维护的官方内核源码树</strong>，托管在 <code>git.kernel.org</code>（仓库 <code>torvalds/linux.git</code>），是整个 Linux 世界的"源头"。每约 2 个月出一个新版本（如 6.12），再分出 <strong>stable 稳定树</strong>（只修 bug 不加功能）和 <strong>LTS 长期支持分支</strong>（如 6.1 / 6.6 / 6.12，维护好几年）。各芯片厂商都从主线 fork 出去打补丁、加板级支持，形成一棵棵分支树——<strong>主线就是它们的"公共祖先"</strong>。</p>
+      <p><strong>主线内核 = Linus Torvalds 亲自维护的官方内核源码树</strong>，托管在 <code>git.kernel.org</code>（仓库 <code>torvalds/linux.git</code>），是整个 Linux 世界的"源头"。每约 2 个月出一个新版本（如 6.12），再分出 <strong>stable 稳定树</strong>（只修 bug 不加功能）和 <strong>LTS 长期支持分支</strong>（如 6.1 / 6.6 / 6.12，维护好几年）。各芯片厂商都从主线派生出的某个 <strong>LTS 发布点</strong> fork 出去，叠加自己的补丁和板级支持，形成一棵棵平行维护的分支树——主线是它们的"源头祖先"，但<strong>厂商分支本身不是官方 stable/LTS 树</strong>。</p>
       <div class="cmd-block">
         <div class="label">内核源码树层级（主线 vs 厂商分支）</div>
         <svg viewBox="0 0 680 250" style="width:100%;max-width:680px;margin:8px auto;display:block;" xmlns="http://www.w3.org/2000/svg">
@@ -2062,24 +2062,28 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
           <line x1="250" y1="60" x2="105" y2="90" stroke="#666" stroke-width="1.5" marker-end="url(#arrMK)"/>
           <line x1="340" y1="60" x2="355" y2="90" stroke="#666" stroke-width="1.5" marker-end="url(#arrMK)"/>
 
-          <text x="340" y="160" text-anchor="middle" font-size="10.5" fill="#9a7ad4">厂商分支：都从主线 fork 出去，打补丁 + 加芯片板级支持</text>
-          <line x1="340" y1="60" x2="340" y2="150" stroke="#9a7ad4" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#arrMK)"/>
+          <text x="340" y="150" text-anchor="middle" font-size="9.5" fill="#9a7ad4">厂商分支：从某个 LTS 发布点 fork 出去（非官方 stable/LTS 树），自己长期维护</text>
+          <line x1="355" y1="132" x2="355" y2="158" stroke="#9a7ad4" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#arrMK)"/>
+          <line x1="120" y1="158" x2="560" y2="158" stroke="#9a7ad4" stroke-width="1.6" stroke-dasharray="6 4"/>
 
-          <rect x="25" y="170" width="195" height="46" rx="8" fill="#f0e6ff" stroke="#9a7ad4" stroke-width="1.4"/>
-          <text x="122" y="190" text-anchor="middle" font-size="12" font-weight="bold" fill="#4a2a6e">linux-at91</text>
-          <text x="122" y="206" text-anchor="middle" font-size="9.5" fill="#666">Microchip（你的 SAMA5 板）</text>
+          <rect x="20" y="178" width="200" height="62" rx="8" fill="#f0e6ff" stroke="#9a7ad4" stroke-width="1.4"/>
+          <text x="120" y="198" text-anchor="middle" font-size="12" font-weight="bold" fill="#4a2a6e">linux-at91</text>
+          <text x="120" y="214" text-anchor="middle" font-size="9.5" fill="#666">Microchip（你的 SAMA5 板）</text>
+          <text x="120" y="230" text-anchor="middle" font-size="9" fill="#9a7ad4">例：linux-6.6-at91 = LTS 6.6 + 补丁</text>
 
-          <rect x="245" y="170" width="190" height="46" rx="8" fill="#f0e6ff" stroke="#9a7ad4" stroke-width="1.4"/>
-          <text x="340" y="190" text-anchor="middle" font-size="12" font-weight="bold" fill="#4a2a6e">linux-imx</text>
-          <text x="340" y="206" text-anchor="middle" font-size="9.5" fill="#666">NXP i.MX 系列</text>
+          <rect x="240" y="178" width="200" height="62" rx="8" fill="#f0e6ff" stroke="#9a7ad4" stroke-width="1.4"/>
+          <text x="340" y="198" text-anchor="middle" font-size="12" font-weight="bold" fill="#4a2a6e">linux-imx</text>
+          <text x="340" y="214" text-anchor="middle" font-size="9.5" fill="#666">NXP i.MX 系列</text>
+          <text x="340" y="230" text-anchor="middle" font-size="9" fill="#9a7ad4">基于某 LTS + NXP 补丁</text>
 
-          <rect x="460" y="170" width="195" height="46" rx="8" fill="#f0e6ff" stroke="#9a7ad4" stroke-width="1.4"/>
-          <text x="557" y="190" text-anchor="middle" font-size="12" font-weight="bold" fill="#4a2a6e">rpi-kernel</text>
-          <text x="557" y="206" text-anchor="middle" font-size="9.5" fill="#666">Raspberry Pi 树莓派</text>
+          <rect x="460" y="178" width="200" height="62" rx="8" fill="#f0e6ff" stroke="#9a7ad4" stroke-width="1.4"/>
+          <text x="560" y="198" text-anchor="middle" font-size="12" font-weight="bold" fill="#4a2a6e">rpi-kernel</text>
+          <text x="560" y="214" text-anchor="middle" font-size="9.5" fill="#666">Raspberry Pi 树莓派</text>
+          <text x="560" y="230" text-anchor="middle" font-size="9" fill="#9a7ad4">基于某 LTS + 树莓派补丁</text>
 
-          <line x1="122" y1="150" x2="122" y2="168" stroke="#9a7ad4" stroke-width="1.4" marker-end="url(#arrMK)"/>
-          <line x1="340" y1="150" x2="340" y2="168" stroke="#9a7ad4" stroke-width="1.4" marker-end="url(#arrMK)"/>
-          <line x1="557" y1="150" x2="557" y2="168" stroke="#9a7ad4" stroke-width="1.4" marker-end="url(#arrMK)"/>
+          <line x1="120" y1="158" x2="120" y2="176" stroke="#9a7ad4" stroke-width="1.4" marker-end="url(#arrMK)"/>
+          <line x1="340" y1="158" x2="340" y2="176" stroke="#9a7ad4" stroke-width="1.4" marker-end="url(#arrMK)"/>
+          <line x1="560" y1="158" x2="560" y2="176" stroke="#9a7ad4" stroke-width="1.4" marker-end="url(#arrMK)"/>
         </svg>
       </div>
       <p>你做实验用的 <code>linux-at91</code> 就是 <strong>Microchip 维护的厂商分支</strong>（图左下角）；同理 NXP 有 <code>linux-imx</code>、树莓派有 <code>rpi-kernel</code>。<strong>"主线已有 mcp251xfd 驱动"的确切含义是：这个驱动已被合并进官方内核源码，不是网友野代码</strong>，所以质量有保障、跟着内核一起升级，你也不用自己写——基于较新的主线或 linux-at91 做内核时，<code>make menuconfig</code> 里直接能找到 <code>CONFIG_CAN_MCP251XFD</code>。</p>
