@@ -2391,7 +2391,7 @@ head -n 5 Makefile              # 确认 VERSION=5 PATCHLEVEL=10（此目录无 
         </ul>
       </div>
       <div class="note" style="background:rgba(255,235,235,0.6);border-left:4px solid #e88;">
-        🚫 <strong>绝不能用容器里较新的 2023.10（6.x）源码直接编模块往 5.10 板子塞。</strong> 模块 vermagic 串来自编译时源码树的版本（6.x），和板子运行的 <code>5.10.80-linux4microchip-2021.10</code> 对不上，<code>modprobe</code> 直接报 <em>Invalid module format</em> 拒载；就算 <code>--force</code> 强插，5.10↔6.x 之间 CAN / 网络子系统结构体已变，会 Unknown symbol 或崩。<strong>要编能上板的模块，源码必须切到 2021.10（5.10）</strong>——就是上面的 checkout 或 git archive，别图省事用 2023.10。
+        🚫 <strong>绝不能用「和板子 <code>uname -r</code> 不一致」的源码树编模块。</strong> 模块的 vermagic 串 = 源码树 <code>VERSION.PATCHLEVEL.SUBLEVEL</code> + <code>LOCALVERSION</code>（含 git hash 后缀），必须和板子 <code>uname -r</code> <strong>逐字相同</strong>，否则 <code>modprobe</code> 直接报 <em>Invalid module format</em> 拒载；跨大版本（如 5.10↔6.x）强插还会 Unknown symbol / 崩。容器当前 checkout 在 <code>linux4microchip-2023.10</code> 的 tip，vermagic 会带 <code>-2711-g99b20cea90ff</code> 这类哈希后缀，和板子的 <code>5.10.80-linux4microchip-2021.10</code>（干净 tag，无哈希）对不上 → <strong>必须切到 2021.10 源码树</strong>（上面的 checkout 或 git archive）再编。注：tag 名里的 2023.10 是 Microchip 发布日期，不是内核版本号；判定能不能编只认 vermagic 串是否等于 <code>uname -r</code>。
       </div>
       <div class="label">生成 .config 基底（sama5_defconfig）</div>
       <pre>make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig</pre>
