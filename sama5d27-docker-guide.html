@@ -2335,6 +2335,21 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
       </details>
       <div class="label">容器内：装 menuconfig 依赖（若基础的 sama5-build 镜像没带）</div>
       <pre>apt-get update &amp;&amp; apt-get install -y libncurses-dev flex bison libssl-dev bc</pre>
+      <div class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid #FAC775;margin:10px 0;font-size:12px;">
+        <p style="margin:0 0 4px;"><strong>⚠ 容易误会：这五个包不全是 menuconfig 的。</strong>只有 <code>libncurses-dev</code> 是 menuconfig 专用（提供字符终端 UI 库）；其余 <code>flex</code> / <code>bison</code> / <code>libssl-dev</code> / <code>bc</code> 都是<strong>内核编译（<code>make</code>）本身</strong>要用的。文档为省事一条 <code>apt-get</code> 全装了，label 才写得笼统，让人以为它们都服务于 menuconfig。各项实际用途：</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>包</th><th>给谁</th><th>为什么</th></tr></thead>
+            <tbody>
+              <tr><td><code>libncurses-dev</code></td><td>menuconfig</td><td>字符终端 UI 库，menuconfig 的菜单/光标靠它；没装跑 menuconfig 会报 <em>Unable to find the ncurses package</em></td></tr>
+              <tr><td><code>flex</code></td><td>make</td><td>词法分析器生成器，构建时现场生成 Kconfig / dtc 的 C 解析代码（<code>.l</code> 文件）</td></tr>
+              <tr><td><code>bison</code></td><td>make</td><td>语法分析器生成器，配合 flex 处理 Kconfig / dtc 的语法（<code>.y</code> 文件）</td></tr>
+              <tr><td><code>libssl-dev</code></td><td>make</td><td>OpenSSL 开发头文件；模块签名 <code>CONFIG_MODULE_SIG</code>（默认开）生成密钥、crypto 子系统引用</td></tr>
+              <tr><td><code>bc</code></td><td>make</td><td>任意精度计算器；内核 time 构建脚本用其做纳秒↔时钟周期等常量换算，编译早期必跑</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
       <div class="label">容器内：拉源码（放 /work，Mac 可见，方便你改 DTS）</div>
       <pre>cd /work
 git clone https://github.com/linux4sam/linux-at91.git
