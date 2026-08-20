@@ -2068,6 +2068,57 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
 
   <section id="lv3-p9">
     <h2 class="step"><span class="num">9</span>项目 9 实战：MCP2518FD SPI-CAN 驱动对接（方案1 重编 + 方案2 overlay 都走）</h2>
+    <div class='note' style='background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;'>
+      <strong>📚 概念：什么是 vermagic（模块版本魔术串）？</strong>
+      <p>每个内核模块 <code>.ko</code> 在编译时，内核构建系统会自动把一串<strong>版本信息焊死进文件</strong>，叫 vermagic（version magic，版本魔术串）。等你 <code>modprobe</code> 加载它时，<strong>运行中的内核会拿这串和自己当前的 vermagic 逐字比对</strong>——一字不差才让加载，差一个字符就拒载（报 <code>Invalid module format</code>）。</p>
+      <p style='margin:6px 0 0;'>串的样子（以你的板子为例）：<code style='font-family:monospace;'>5.10.80-linux4microchip-2021.10 SMP preempt mod_unload ARMv7</code>，由三部分拼成：</p>
+      <ul style='margin:4px 0 0;'>
+        <li><code>5.10.80</code> → 来自源码树 <code>Makefile</code> 的 <code>VERSION.PATCHLEVEL.SUBLEVEL</code></li>
+        <li><code>-linux4microchip-2021.10</code> → 来自 <code>CONFIG_LOCALVERSION</code>（前面用 <code>scripts/config --set-str</code> 设的后缀）</li>
+        <li><code>SMP preempt mod_unload ARMv7 …</code> → 来自编译时的内核配置选项（对称/抢占/架构等）</li>
+      </ul>
+      <p style='margin:6px 0 0;'><strong>内核为什么搞这道检查？</strong> 这是一道<strong>内存安全保护</strong>。内核和模块靠一堆内部符号（函数、结构体）互相调用，不同版本里这些符号的"长相"可能变了；若把给 6.x 编的模块塞进 5.10 内核，它引用的结构体字段可能不存在或被挪位 → 直接踩内存、内核崩溃（oops）。vermagic 在校验阶段就把危险组合挡在门外。</p>
+      <p style='margin:6px 0 0;'><strong>怎么看两端各自是啥：</strong></p>
+      <pre style='margin:6px 0 0;'>modinfo mcp25xxfd.ko | grep vermagic     # 模块这边
+uname -r                                # 板子内核这边（= 5.10.80-linux4microchip-2021.10）</pre>
+      <p style='margin:6px 0 0;'><strong>和本项目的关系：</strong> 容器里那棵 2023.10 源码编出的模块，vermagic 会带 <code>-linux4microchip-2023.10</code> 甚至 git 哈希，对不上板子 → 拒载；而走 <a href='#lv3-p11'>步骤 11.1</a> 的 Buildroot 整镜像时，内核和模块从<strong>同一棵树</strong>一起编，vermagic 天生一致，这道校验自动通过——这就是下面"更省心"提示卡的根本原因。</p>
+      <svg viewBox='0 0 680 440' style='width:100%;max-width:680px;margin:10px auto;display:block;' xmlns='http://www.w3.org/2000/svg'>
+        <defs>
+          <marker id='vArr' viewBox='0 0 10 10' refX='8' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M2 1L8 5L2 9' fill='none' stroke='#888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/>
+          </marker>
+        </defs>
+        <text x='40' y='34' font-size='14' font-weight='bold' fill='#2c2c2a'>vermagic = 内核模块里的「版本身份证」</text>
+        <text x='40' y='56' font-size='12.5' fill='#666'>编译时写进 .ko 文件，加载时内核逐字校验，对不上就拒载</text>
+        <rect x='40' y='92' width='250' height='118' rx='12' fill='#eef2ff' stroke='#9bbce0' stroke-width='1'/>
+        <text x='56' y='116' font-size='13' font-weight='bold' fill='#2c2c2a'>模块 .ko 文件</text>
+        <text x='56' y='140' font-size='12' fill='#666'>内部嵌入 vermagic 串：</text>
+        <text x='56' y='163' font-family='monospace' font-size='12' fill='#185fa5'>5.10.80-linux4microchip-</text>
+        <text x='56' y='181' font-family='monospace' font-size='12' fill='#185fa5'>2021.10 SMP preempt</text>
+        <text x='56' y='199' font-family='monospace' font-size='12' fill='#185fa5'>mod_unload ARMv7</text>
+        <rect x='305' y='120' width='130' height='58' rx='12' fill='#f3edff' stroke='#b07bff' stroke-width='1'/>
+        <text x='370' y='144' text-anchor='middle' font-size='13' font-weight='bold' fill='#2c2c2a'>modprobe</text>
+        <text x='370' y='164' text-anchor='middle' font-size='12' fill='#666'>请求加载</text>
+        <rect x='450' y='92' width='190' height='118' rx='12' fill='#eef2ff' stroke='#9bbce0' stroke-width='1'/>
+        <text x='466' y='116' font-size='13' font-weight='bold' fill='#2c2c2a'>运行内核</text>
+        <text x='466' y='136' font-size='12' fill='#666'>uname -r 对应：</text>
+        <text x='466' y='163' font-family='monospace' font-size='11' fill='#185fa5'>5.10.80-linux4microchip-</text>
+        <text x='466' y='181' font-family='monospace' font-size='11' fill='#185fa5'>2021.10 SMP preempt</text>
+        <text x='466' y='199' font-family='monospace' font-size='11' fill='#185fa5'>mod_unload ARMv7</text>
+        <path d='M290 149 H305' stroke='#888' stroke-width='1.5' fill='none' marker-end='url(#vArr)'/>
+        <path d='M435 149 H450' stroke='#888' stroke-width='1.5' fill='none' marker-end='url(#vArr)'/>
+        <rect x='220' y='262' width='300' height='54' rx='12' fill='#fff6e0' stroke='#ef9f27' stroke-width='1'/>
+        <text x='370' y='289' text-anchor='middle' font-size='13' font-weight='bold' fill='#2c2c2a'>内核逐字比对两段 vermagic</text>
+        <rect x='60' y='354' width='200' height='58' rx='12' fill='#eaf3de' stroke='#639922' stroke-width='1'/>
+        <text x='160' y='380' text-anchor='middle' font-size='13' font-weight='bold' fill='#3B6D11'>一致 → 加载成功</text>
+        <text x='160' y='400' text-anchor='middle' font-size='12' fill='#666'>驱动正常运行</text>
+        <rect x='420' y='354' width='200' height='58' rx='12' fill='#fcebde' stroke='#a32d2d' stroke-width='1'/>
+        <text x='520' y='380' text-anchor='middle' font-size='13' font-weight='bold' fill='#a32d2d'>不一致 → 拒载</text>
+        <text x='520' y='400' text-anchor='middle' font-size='12' fill='#666'>Invalid module format</text>
+        <path d='M370 316 C 370 336 160 336 160 354' stroke='#888' stroke-width='1.5' fill='none' marker-end='url(#vArr)'/>
+        <path d='M370 316 C 370 336 520 336 520 354' stroke='#888' stroke-width='1.5' fill='none' marker-end='url(#vArr)'/>
+      </svg>
+    </div>
     <div class="note" style="background:rgba(234,243,222,0.5);border-left:4px solid #3B6D11;">
       <strong>📌 另一条更省心的路：Buildroot 整镜像（步骤 11.1）</strong>
       <p style="margin:6px 0 0;">除了下面方案 1（内核树重编）和方案 2（overlay），你还可以走 <a href="#lv3-p11">步骤 11.1</a> 的 Buildroot 整镜像路线：它把内核 + 驱动模块 + 根文件系统从<strong>同一棵源码树</strong>一起编出来，<strong>vermagic 天然与板子一致</strong>，不存在"外部模块塞不进"的问题。</p>
