@@ -2361,7 +2361,9 @@ cd /work/linux-at91            # 换成你实际的路径（容器里这份就�
 
 # 核对版本：方案 1 要求源码版本与板子烧录镜像一致
 git describe --tags            # 看当前 HEAD 落在哪个 tag
-git checkout linux4sam-2024.04 # 不一致就切到与板子同版本（uname -r 看线索）
+git tag | grep 2021.10             # 先列出匹配的 tag，确认精确名（你的板子是 2021.10）
+git checkout linux4microchip-2021.10   # 必须 = 板子 uname -r！否则编出的 .ko vermagic 不符，板子拒载
+#   ↑ 绝不要照抄成 2024.04 等别的版本；版本不一致 = vermagic 不匹配 = modprobe 失败
 git status                     # 看有没有未提交本地改动，必要时 git stash 收起
 
 make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig</pre>
@@ -2374,7 +2376,7 @@ make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig<
     </div>
 
     <h4>步骤 9.4：把 9.2 的片段贴进板子 DTS</h4>
-    <p>打开 <code>arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dts</code>（新内核在 <code>microchip/</code> 子目录），在文件末尾的 <code>/ { ... };</code> 之外、或已有的 <code>&amp;spi6</code> 节点里，加上 9.2 那段（<code>can_osc</code> 时钟放根节点，<code>can@0</code> 子节点放 <code>&amp;spi6</code> 下）。</p>
+    <p>打开板子的 DTS 文件：<strong>5.10 等老版本在 <code>arch/arm/boot/dts/at91-sama5d27_som1_ek.dts</code>（没有 <code>microchip/</code> 子目录）；6.x 才移到 <code>arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dts</code></strong>。在你的版本对应路径下，在已有的 <code>&amp;spi6</code> 节点里加上 9.2 那段（<code>can_osc</code> 时钟放根节点 <code>/ { ... };</code>，<code>can@0</code> 子节点放 <code>&amp;spi6</code> 下）。</p>
 
     <h4>步骤 9.5：menuconfig 开驱动</h4>
     <div class="cmd-block">
@@ -2415,8 +2417,8 @@ make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) modul
     </div>
     <div class="cmd-explain">
       <ul>
-        <li>产物 dtb：<code>/root/kbuild/arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dtb</code></li>
-        <li>产物 ko：<code>/root/kbuild/drivers/net/can/spi/mcp251xfd/mcp251xfd.ko</code></li>
+        <li>产物 dtb：<code>/root/kbuild/arch/arm/boot/dts/at91-sama5d27_som1_ek.dtb</code>（<strong>5.10 老版本无 <code>microchip/</code> 子目录，直接在此</strong>；6.x 才在 <code>microchip/</code> 下）</li>
+        <li>产物 ko：5.10 驱动仍叫旧名 <code>.../mcp25xxfd/mcp25xxfd.ko</code>（对 MCP2518FD 支持有限）；6.x 才改名 <code>.../mcp251xfd/mcp251xfd.ko</code>。编译后用 <code>find /root/kbuild -name 'mcp25*fd.ko'</code> 确认实际文件名</li>
       </ul>
     </div>
 
@@ -2424,28 +2426,30 @@ make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) modul
     <div class="cmd-block">
       <div class="label">在 Mac 终端执行（需板子 root 密码）</div>
       <pre># 0) 产物在容器地盘 /root/kbuild，Mac 直接看不到，先 docker cp 到 Mac 可见的 /work
-docker exec sama5-dev cp /root/kbuild/arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dtb /work/
-docker exec sama5-dev cp /root/kbuild/drivers/net/can/spi/mcp251xfd/mcp251xfd.ko /work/
+      # 5.10 老版本 dtb 在 arch/arm/boot/dts/ 直接下（无 microchip/ 子目录）；6.x 在 microchip/ 下
+      docker exec sama5-dev cp /root/kbuild/arch/arm/boot/dts/at91-sama5d27_som1_ek.dtb /work/
+      # ko 文件名随版本变：5.10 叫 mcp25xxfd.ko，6.x 叫 mcp251xfd.ko。先 find 确认再拷
+      docker exec sama5-dev bash -c 'find /root/kbuild -name "mcp25*fd.ko" -exec cp {} /work/ \;'
 
 # 1) 换设备树（先备份旧的！）
 ssh root@192.168.2.10 'cp /boot/dtbs/at91-sama5d27_som1_ek.dtb /boot/dtbs/at91-sama5d27_som1_ek.dtb.bak'
 scp /work/at91-sama5d27_som1_ek.dtb \
     root@192.168.2.10:/boot/dtbs/at91-sama5d27_som1_ek.dtb
 
-# 2) 拷驱动模块（若编成 =m）
-scp /work/mcp251xfd.ko \
+      # 2) 拷驱动模块（若编成 =m；文件名 5.10 是 mcp25xxfd.ko，6.x 是 mcp251xfd.ko）
+      scp /work/mcp25xxfd.ko \
     root@192.168.2.10:/lib/modules/$(ssh root@192.168.2.10 'uname -r')/kernel/drivers/net/can/spi/
 
-# 3) 刷模块依赖并加载（若编成 =y 这步可省，开机自动有）
-ssh root@192.168.2.10 'depmod -a &amp;&amp; modprobe mcp251xfd'</pre>
+      # 3) 刷模块依赖并加载（若编成 =y 这步可省，开机自动有；模块名同样 5.10=mcp25xxfd / 6.x=mcp251xfd）
+      ssh root@192.168.2.10 'depmod -a &amp;&amp; modprobe mcp25xxfd'</pre>
     </div>
 
     <h4>步骤 9.8：验证 probe 成功</h4>
     <div class="cmd-block">
       <div class="label">在板子上</div>
-      <pre>dmesg | grep mcp251xfd
+      <pre>dmesg | grep mcp25xxfd     # 5.10 驱动名 mcp25xxfd；6.x 用 mcp251xfd
 # 期望看到类似：
-# mcp251xfd spi6.0 can1: MCP2518FD rev0.0 (...) successfully initialized.
+# mcp25xxfd spi6.0 can1: MCP2518FD rev0.0 (...) successfully initialized.
 ip link show can1        # 能看到 can1 接口 = 驱动已建好网络设备和 sysfs</pre>
     </div>
     <div class="tip"><strong>看到 "successfully initialized" + can1 出现 = 方案 1 成功。</strong> 直接跳到 9.15 做用户态收发测试。</div>
