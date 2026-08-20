@@ -2169,6 +2169,7 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
 
     <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
       <strong>📚 概念补充：Kconfig 是什么？（方案 1 你在 menuconfig 里「开选项」到底开了啥）</strong>
+      <p style="font-size:11px;color:#888;margin:-2px 0 8px;">📝 名字拆解：<code>Kconfig</code> = <strong>K</strong>ernel（内核）+ <strong>config</strong>uration（配置），全称「内核配置」系统，跟 keyboard / key 没关系。</p>
       <p><strong>Kconfig 是内核源码树里成千上万个"配置菜单定义文件"</strong>（散落在各子目录，如 <code>drivers/net/can/spi/Kconfig</code>、<code>drivers/spi/Kconfig</code>），用简单语法声明"这个内核支持哪些可选项、叫什么名、依赖谁、默认开不开"。口语说"在 menuconfig 里开 Kconfig 选项"并不严格——<strong>Kconfig 只是只读的菜谱/清单，真正的"你点了哪些菜"记录在根目录的 <code>.config</code> 文件里</strong>（形如 <code>CONFIG_CAN_MCP251XFD=m</code>）。<code>make menuconfig</code> 是把所有 Kconfig 收集起来渲染成图形界面让你勾选的"点餐程序"，勾完保存就往 <code>.config</code> 写对应的 <code>CONFIG_XXX=...</code>。</p>
       <div class="cmd-block">
         <div class="label">从 Kconfig 到可加载模块的四步链路</div>
