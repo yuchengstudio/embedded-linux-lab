@@ -2390,6 +2390,9 @@ head -n 5 Makefile              # 确认 VERSION=5 PATCHLEVEL=10（此目录无 
           <li><strong>③ 出厂镜像有没有编进去</strong>：见 <a href="#lv3-p9-env">步骤 9.9</a> 的 <code>zcat /proc/config.gz | grep CAN_MCP25XXFD</code> + <code>ls .../can/spi/mcp25xxfd.ko</code>——决定走方案 1 还是 2。</li>
         </ul>
       </div>
+      <div class="note" style="background:rgba(255,235,235,0.6);border-left:4px solid #e88;">
+        🚫 <strong>绝不能用容器里较新的 2023.10（6.x）源码直接编模块往 5.10 板子塞。</strong> 模块 vermagic 串来自编译时源码树的版本（6.x），和板子运行的 <code>5.10.80-linux4microchip-2021.10</code> 对不上，<code>modprobe</code> 直接报 <em>Invalid module format</em> 拒载；就算 <code>--force</code> 强插，5.10↔6.x 之间 CAN / 网络子系统结构体已变，会 Unknown symbol 或崩。<strong>要编能上板的模块，源码必须切到 2021.10（5.10）</strong>——就是上面的 checkout 或 git archive，别图省事用 2023.10。
+      </div>
       <div class="label">生成 .config 基底（sama5_defconfig）</div>
       <pre>make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig</pre>
       <div class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid #FAC775;margin:10px 0;font-size:12px;">
