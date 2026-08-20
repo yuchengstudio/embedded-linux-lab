@@ -2087,6 +2087,19 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
         </svg>
       </div>
       <p>你做实验用的 <code>linux-at91</code> 就是 <strong>Microchip 维护的厂商分支</strong>（图左下角）；同理 NXP 有 <code>linux-imx</code>、树莓派有 <code>rpi-kernel</code>。<strong>"主线已有 mcp251xfd 驱动"的确切含义是：这个驱动已被合并进官方内核源码，不是网友野代码</strong>，所以质量有保障、跟着内核一起升级，你也不用自己写——基于较新的主线或 linux-at91 做内核时，<code>make menuconfig</code> 里直接能找到 <code>CONFIG_CAN_MCP251XFD</code>。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>mainline 版本</th><th>mcp25xxfd / mcp251xfd 驱动情况</th></tr></thead>
+          <tbody>
+            <tr><td>&lt; 5.4</td><td>无此驱动（MCP2517FD / 2518FD 都不支持）</td></tr>
+            <tr><td>5.4 ~ 5.11</td><td>旧名 <code>mcp25xxfd</code>，主要支持 MCP2517FD，对 2518FD 支持有限</td></tr>
+            <tr><td>≥ 5.12</td><td>改名 <code>mcp251xfd</code>，MCP2517FD / 2518FD 都支持（项目 9 用的就是它）</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="tip">
+        <strong>📌 版本分界：</strong> 以 <strong>5.4</strong> 为「MCP2517FD 进门」、<strong>5.12</strong> 为「MCP2518FD 完整支持」分界。驱动合进 mainline 后会顺带流进基于 ≥ 该版本的 stable / LTS 树；但比它老的 LTS（如 4.19）仍然没有。你板子的 linux-at91 须基于 <strong>≥ 5.12 的 mainline</strong> 且 <code>sama5_defconfig</code> 开了 <code>CONFIG_CAN_MCP251XFD</code>，才真正拿到这驱动。
+      </div>
       <p>⚠ <strong>关键：主线已有 ≠ 你板子正在跑的内核已有。</strong>出厂镜像通常是某个较旧的 linux-at91 版本，可能已带 <code>mcp251xfd.ko</code>（那你走方案 2 轻松），也可能压根没开 <code>CONFIG_CAN_MCP251XFD</code>（那就必须走方案 1 重编）。这正是后面那几条确认命令要回答的问题。</p>
     </div>
 
