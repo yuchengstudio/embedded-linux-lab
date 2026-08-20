@@ -2814,6 +2814,15 @@ candump can1             # 接上 CAN 总线应有报文</pre>
     <div class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);">
       <strong>⚠️ 两点坑：</strong> ① 若你 base 镜像的 <code>sama5_defconfig</code> 连 <code>CONFIG_CAN</code> 都没开，<code>mcp25xxfd</code> 依赖的总线子系统不存在 → 仍需 <code>linux-rebuild</code> 把 CAN 编进内核（上面的 ① 已含此步，重编内核会带上）。② dtb 必须和板子实际硬件接线一致（SPI 总线号、INT/CS 引脚、晶振频率），节点写错驱动 probe 不到或起不来——DTS 片段以方案 1 的 9.4 为准。
     </div>
+    <div class="note" style="background:rgba(232,240,255,0.6);border-left:4px solid #5b8ad6;margin-top:12px;">
+      <strong>💡 这是「最快验证」方案，不是「长期最优」方案：</strong> 上面 5 步（尤其方式 A 改 in-tree dts）改的是 Buildroot 的<strong>临时构建目录</strong> <code>output/build/linux-*</code>，没存回 defconfig。一旦 <code>make linux-dirclean</code> 或将来全量 <code>make</code> 用旧 defconfig 重建，改动就丢了——板子下次重烧又没这驱动。<strong>所以正确节奏是：先用本小节跑通、确认硬件/DTS 没问题（失败成本低）；验证 OK 后，把驱动固化进「最终形态」：</strong>
+      <ul style="margin:6px 0 0;">
+        <li><code>make O=/root/br-out linux-savedefconfig</code> 把改后的内核配置存回 Buildroot 的 linux defconfig；或在 <code>configs/atmel_sama5d27_som1_ek_mmc_dev_defconfig</code> 里加 <code>BR2_LINUX_KERNEL_INTREE_DTS_NAME</code> 对应项 + <code>CONFIG_CAN_MCP25XXFD=m</code> 的等效写法。</li>
+        <li>自定义 DTS 改用 <code>BR2_LINUX_KERNEL_CUSTOM_DTS_PATH="..."</code> 指向你放在 <code>/work</code> 下的持久 dts 文件（方式 B），别再依赖 in-tree 临时修改。</li>
+        <li>最后 <strong>重烧一次整镜像</strong>：驱动随镜像走，vermagic 仍一致、板子长期可复现，将来重烧不丢。</li>
+      </ul>
+      简言之：<strong>增量重编 = 快速验证用；固化 defconfig + 重烧 = 生产/长期用。</strong>两者不矛盾，先快后稳。
+    </div>
   </section>
 
   <div id="lv3-future" class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);margin:12px 0;">
