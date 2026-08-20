@@ -1049,7 +1049,17 @@ mkfs.ext4 -d my-rootfs my-rootfs.ext4</pre>
     </div>
   </details>
 
-  <h3>步骤 11.1：构建 Buildroot（容器内）</h3>
+  <h3 id="lv3-p11">步骤 11.1：构建 Buildroot（容器内）</h3>
+
+  <div class="note" style="background:rgba(234,243,222,0.5);border-left:4px solid #3B6D11;">
+    <strong>📌 buildroot-at91 与 linux-at91 是什么关系？</strong>
+    <p style="margin:6px 0 0;">一句话：<strong>buildroot-at91 是"总指挥"，linux-at91 是它采购的一种"建材（内核）"</strong>。两者不是并列的两份内核，而是"构建系统"和"被构建组件"的关系。</p>
+    <ul style="margin:6px 0 0;">
+      <li><strong>linux-at91</strong>＝Microchip 对 Linux 内核的 fork，只编 <code>zImage</code> / <code>*.dtb</code> / <code>*.ko</code>。你 <code>git clone</code> 到 <code>/work/linux-at91</code> 的那棵是独立的一份，想单编模块时用。</li>
+      <li><strong>buildroot-at91</strong>＝整套系统构建器。它会自己按 defconfig 指定的 tag 去 clone / 下载一份干净内核（<strong>不用你 /work/linux-at91</strong>），再连同交叉工具链、U-Boot、根文件系统一起编，最终拼成可烧录的 SD 卡镜像。</li>
+    </ul>
+    <p style="margin:6px 0 0;">⚠ <strong>常见踩坑</strong>：Buildroot 的 <code>atmel_sama5d27_som1_ek_mmc_dev_defconfig</code> 是 Buildroot 的命令，<strong>必须在 <code>/work/buildroot-at91</code> 目录里跑</strong>；在内核树 <code>/work/linux-at91</code> 里跑会报 <code>source tree is not clean</code>。两条树的命令别混。</p>
+  </div>
 
   <div class="warn">
     <strong>⚠️ macOS 挂载目录会导致编译失败，必须用 O= 参数</strong>
@@ -1058,7 +1068,7 @@ mkfs.ext4 -d my-rootfs my-rootfs.ext4</pre>
 
   <div class="cmd-block">
     <div class="label">容器内 · 首次构建约 1-2 小时</div>
-    <pre>cd /work
+      <pre>cd /work
 git clone https://github.com/linux4sam/buildroot-at91.git
 cd buildroot-at91
 ls configs/ | grep sama5d2
@@ -1067,6 +1077,31 @@ make O=/root/br-out atmel_sama5d27_som1_ek_mmc_dev_defconfig
 nohup make O=/root/br-out -j$(nproc) > /root/build.log 2>&1 &
 tail -f /root/build.log</pre>
   </div>
+
+  <div class="note" style="background:rgba(225,245,238,0.5);border-left:4px solid #0F6E56;">
+    <strong>🔍 怎么看 Buildroot 编的是哪个内核版本？</strong>
+    <p style="margin:6px 0 0;">三种看法，由快到准：</p>
+    <ul style="margin:6px 0 0;">
+      <li><strong>① 直接读 defconfig（不用编）</strong>：<code>grep -iE "BR2_LINUX_KERNEL" configs/atmel_sama5d27_som1_ek_mmc_dev_defconfig</code> → 看 <code>BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION</code> 里的 tag。</li>
+      <li><strong>② defconfig 生成后查 .config</strong>：<code>grep -iE "BR2_LINUX_KERNEL_CUSTOM_REPO_TAGS|BR2_LINUX_KERNEL_VERSION" /root/br-out/.config</code></li>
+      <li><strong>③ 编译开始后看真实基础版本</strong>：<code>head -n 5 /root/br-out/build/linux-*/Makefile</code> → <code>VERSION.PATCHLEVEL</code> 是 5.10 还是 6.x 一目了然，决定驱动符号名（见下）。</li>
+    </ul>
+    <p style="margin:6px 0 0;">✅ <strong>关键事实</strong>：本 defconfig 默认拉 <code>linux4microchip-2021.10</code>（tarball），<strong>和你板子 <code>uname -r</code> 的 <code>5.10.80-linux4microchip-2021.10</code> 完全一致</strong>。也就是说走 Buildroot 路线，板子烧完内核仍是 2021.10、<strong>vermagic 与板子天然一致</strong>，不存在"外部模块塞不进"的问题——项目 9 走这条路线最省心。</p>
+  </div>
+
+  <div class="warn" style="background:rgba(252,235,235,0.6);border-left:4px solid #E24B4A;">
+    <strong>⚠️ 能否把内核单独换成更新的（如 2023.10）？</strong>
+    <p style="margin:6px 0 0;">可以——改 defconfig 里的 <code>BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION</code> 把 <code>2021.10</code> 换成 <code>2023.10</code> 即可（<code>sed -i 's/linux4microchip-2021\.10/linux4microchip-2023.10/g' configs/atmel_sama5d27_som1_ek_mmc_dev_defconfig</code> 后重跑 defconfig）。但要注意：</p>
+    <ul style="margin:6px 0 0;">
+      <li><strong>① DTS 路径变了（最易卡）</strong>：2023.10 若基于 6.x，SAMA5 的 dts 挪到了 <code>arch/arm/boot/dts/microchip/</code> 子目录，而 defconfig 写的是直下路径 <code>at91-sama5d27_som1_ek</code>。需把 <code>BR2_LINUX_KERNEL_INTREE_DTS_NAME</code> 改成 <code>microchip/at91-sama5d27_som1_ek</code>，否则 Buildroot 找不到 dts → 构建失败或编错 dtb。</li>
+      <li><strong>② "未官方验证的组合"</strong>：这份 buildroot-at91 当初按 2021.10 测过，单把内核跨两年拉到 2023.10 属混搭，Buildroot 的 <code>linux.mk</code> 解析或自带内核补丁可能不完全合新代码（概率低但排错费时）。更稳的做法是连 buildroot-at91 也升到默认就指向 2023.10 的版本 / 分支。</li>
+      <li><strong>③ 驱动符号改名</strong>：6.x 里 MCP2518FD 驱动是 <code>mcp251xfd</code>（<code>CONFIG_CAN_MCP251XFD</code>），不再是 5.10 的 <code>mcp25xxfd</code>。回头加项目 9 驱动要用新符号。</li>
+      <li><strong>④ 板子整体升内核</strong>：烧完板子跑 2023.10，不再是原 2021.10，依赖旧内核的东西自评估。</li>
+    </ul>
+    <p style="margin:6px 0 0;">✅ <strong>不变差的</strong>：vermagic / 模块加载仍一致（Buildroot 内核 + 模块同源），模块能正常 <code>modprobe</code>。</p>
+    <p style="margin:6px 0 0;">💡 <strong>建议</strong>：只为让 MCP2518FD 能用 → 用默认 2021.10 最稳；要完整 CAN FD 特性 → 换 2023.10，但优先升级整个 buildroot-at91 到配套版本，而非在老 Buildroot 里单改内核。</p>
+  </div>
+
   <div class="cmd-explain">
     <ul>
       <li><code>ls configs/ | grep sama5d2</code> — 先列出该仓库实际提供的 SAMA5D2 系列配置，避免配置名写错。</li>
@@ -2033,6 +2068,11 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
 
   <section id="lv3-p9">
     <h2 class="step"><span class="num">9</span>项目 9 实战：MCP2518FD SPI-CAN 驱动对接（方案1 重编 + 方案2 overlay 都走）</h2>
+    <div class="note" style="background:rgba(234,243,222,0.5);border-left:4px solid #3B6D11;">
+      <strong>📌 另一条更省心的路：Buildroot 整镜像（步骤 11.1）</strong>
+      <p style="margin:6px 0 0;">除了下面方案 1（内核树重编）和方案 2（overlay），你还可以走 <a href="#lv3-p11">步骤 11.1</a> 的 Buildroot 整镜像路线：它把内核 + 驱动模块 + 根文件系统从<strong>同一棵源码树</strong>一起编出来，<strong>vermagic 天然与板子一致</strong>，不存在"外部模块塞不进"的问题。</p>
+      <p style="margin:6px 0 0;">本 defconfig 默认拉 <code>linux4microchip-2021.10</code>，<strong>和你板子 <code>uname -r</code> 的 <code>5.10.80-linux4microchip-2021.10</code> 完全一致</strong>——走这条路线板子内核不跳代、模块直接能加载。关于 buildroot-at91 与 linux-at91 的关系、怎么查它拉哪个内核版本、以及"能否换成更新的 2023.10"的风险，都写在 <a href="#lv3-p11">步骤 11.1</a> 开头的三张说明框里，做项目 9 前建议先读。</p>
+    </div>
 
     <p>这一项把你在 <a href="#s13-2">第 13.2 节</a>（设备树 → 驱动匹配）和 <a href="#s13-5">第 13.4 节</a>（用户态操作内核接口）学到的东西，用到一个<strong>真实的 SPI 外设</strong>上。先说清楚：<strong>这个实验不是写驱动</strong>——Linux 主线内核已经有 MCP2518FD 的驱动 <code>mcp251xfd</code>（老版本叫 <code>mcp25xxfd</code>），位置 <code>drivers/net/can/spi/mcp251xfd/</code>，配置项 <code>CONFIG_CAN_MCP251XFD</code>。你要做的三件事和项目 8 一个套路：<strong>接线 → 用设备树把芯片挂到 SPI 上 → 让内核的驱动 probe 成功 → 用户态用 SocketCAN 收发</strong>。</p>
 
@@ -2657,6 +2697,10 @@ cansend can1 123##1.11.22.33.44</pre>
     </div>
     <div class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);">
       <strong>为什么让你两个都走一遍：</strong> 方案 1 让你完整理解"设备树怎么进内核、驱动怎么编出来"；方案 2 让你体会"出厂系统上最小改动挂硬件"的工程现实。两者在 <code>dmesg</code> 看到 <code>successfully initialized</code> 的那一刻汇合——驱动 probe 成功的判据完全一样。这正是 <a href="#s13-2">13.2</a>（设备树→驱动匹配）和 <a href="#s13-5">13.4</a>（用户态操作内核接口）的真实外设落地。
+    </div>
+    <div class="note" style="background:rgba(225,245,238,0.5);border-left:4px solid #0F6E56;margin-top:12px;">
+      <strong>💡 方案 3（更省心）：Buildroot 整镜像路线</strong>
+      <p style="margin:6px 0 0;">如果不想纠结 vermagic 与"外部模块塞不进板"，可以直接走 <a href="#lv3-p11">步骤 11.1</a> 的 Buildroot 整镜像：内核 + 模块 + 根文件系统同源编译，vermagic 自动与板子一致。其 defconfig 默认拉 <code>linux4microchip-2021.10</code>（= 你板子 <code>uname -r</code>），板子烧完内核不跳代；若想拿更完整的 CAN FD 特性，可把内核换成 2023.10，但需注意 DTS 路径（<code>microchip/</code> 子目录）、驱动改名（<code>mcp251xfd</code>）、以及"老 Buildroot 配新内核"的组合风险——详见 <a href="#lv3-p11">步骤 11.1</a> 开头三张说明框。</p>
     </div>
   </section>
 
