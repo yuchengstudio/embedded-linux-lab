@@ -2119,6 +2119,17 @@ uname -r                                # 板子内核这边（= 5.10.80-linux4m
         <path d='M370 316 C 370 336 520 336 520 354' stroke='#888' stroke-width='1.5' fill='none' marker-end='url(#vArr)'/>
       </svg>
     </div>
+    <div class="note" style="background:rgba(248,240,250,0.6);border-left:4px solid #b07bff;margin-top:12px;">
+      <strong>📚 嵌入式开发中「加一个外设驱动」最常用的是什么？（行业常规）</strong>
+      <p style="margin:6px 0 0;">先破除一个常见误解：<strong>绝大多数「加驱动」其实不写 C 驱动代码</strong>。CAN、I2C、SPI、USB、以太网这些常见外设，驱动早就在 Linux 内核（主线或厂商分支）里了。你要做的只是两件事——<strong>① 在设备树（DTS）里描述硬件</strong>（接哪条总线、中断脚、片选、时钟频率）；<strong>② 在 defconfig 里把对应 <code>CONFIG_XXX</code> 打开</strong>（=M 编成模块，或 =* 编进内核），然后重编内核。</p>
+      <p style="margin:6px 0 0;"><strong>按使用频率排，业界真实做法：</strong></p>
+      <ul style="margin:4px 0 0;">
+        <li><strong>① 厂商 BSP 整编（产品 / 量产绝对主流）</strong>：直接拿芯片厂维护的构建系统——Microchip 用 <code>buildroot-at91</code> / Yocto(meta-atmel)、NXP 用 Yocto(imx-linux)、TI 用 Yocto(meta-ti)、树莓派用 rpi kernel + rpi OS。在上面改 defconfig + 加自定义 DTS，<strong>全编重烧整镜像</strong>。你本项目走的 Buildroot 整镜像（方案 3）就是这条标准路线。</li>
+        <li><strong>② 单编内核模块 scp 上板（开发调试期高频）</strong>：改了驱动 C 代码或只想快速验证、不愿每次全编 1-2 小时 → 用板子<strong>同款内核源码树</strong>单编 <code>.ko</code>，拷上去 <code>insmod</code>。这是前面「方案 1」的本质，<strong>只是调试手段、不是交付形态</strong>（量产不会给每台板子 scp .ko）。</li>
+        <li><strong>③ DT overlay（社区板常见）</strong>：树莓派 / BeagleBone 生态里极常见——<code>config.txt</code> 里 <code>dtoverlay=xxx</code>，不改内核、不改 base dtb，热插拔式加硬件。严肃产品里用得少（调试 / 版本耦合麻烦）。</li>
+      </ul>
+      <p style="margin:6px 0 0;"><strong>所以你的项目放进行业坐标：</strong>走 Buildroot-at91 整镜像 = 厂商官方标准路线 = <strong>产品里最常用的方案</strong>；开发期先用「增量重编 + 拷 ko/dtb」快速验证（方案 3 实战），验证 OK 再固化 defconfig + 重烧 = 交付形态。日常 80% 工作量在 <strong>DTS + Kconfig</strong>，不是写驱动 C 代码。</p>
+    </div>
     <div class="note" style="background:rgba(234,243,222,0.5);border-left:4px solid #3B6D11;">
       <strong>📌 另一条更省心的路：Buildroot 整镜像（步骤 11.1）</strong>
       <p style="margin:6px 0 0;">除了下面方案 1（内核树重编）和方案 2（overlay），你还可以走 <a href="#lv3-p11">步骤 11.1</a> 的 Buildroot 整镜像路线：它把内核 + 驱动模块 + 根文件系统从<strong>同一棵源码树</strong>一起编出来，<strong>vermagic 天然与板子一致</strong>，不存在"外部模块塞不进"的问题。</p>
