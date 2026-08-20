@@ -2369,9 +2369,17 @@ git describe --tags            # 看当前 HEAD 落在哪个 tag（容器源码�
 git tag | grep 2021.10             # 先列出匹配的 tag，确认精确名（你的板子是 2021.10）
 git checkout linux4microchip-2021.10   # 必须 = 板子 uname -r！否则编出的 .ko vermagic 不符，板子拒载
 #   ↑ 绝不要照抄成 2024.04 等别的版本；版本不一致 = vermagic 不匹配 = modprobe 失败
-git status                     # 看有没有未提交本地改动，必要时 git stash 收起
-
-make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig</pre>
+git status                     # 看有没有未提交本地改动，必要时 git stash 收起</pre>
+      <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
+        <strong>📌 怎么确认「这个内核版本」带 MCP2518FD 驱动？看三层：</strong>
+        <ul style="margin:6px 0 0;">
+          <li><strong>① 源码树里有没有代码</strong>：进 checkout 好的源码目录跑 <code>ls drivers/net/can/spi/mcp25xxfd/</code>（5.10 老名）或 <code>mcp251xfd/</code>（6.x）。看到 <code>.c</code> = 源码在、可编。也可 <code>grep -rn "MCP2518FD" drivers/net/can/spi/Kconfig</code> 看 Kconfig 选项。</li>
+          <li><strong>② 版本分界</strong>：主线 <strong>5.4 起</strong>就有此驱动（当时叫 <code>mcp25xxfd</code>，2517FD/2518FD 通用）；<strong>5.12 才改名 <code>mcp251xfd</code></strong> 并完善 FD 特性。所以你的板子 5.10 <strong>一定有源码</strong>，但符号是旧名 <code>CONFIG_CAN_MCP25XXFD</code>，FD 成熟度不如 6.x。</li>
+          <li><strong>③ 出厂镜像有没有编进去</strong>：见 <a href="#lv3-p9-env">步骤 9.9</a> 的 <code>zcat /proc/config.gz | grep CAN_MCP25XXFD</code> + <code>ls .../can/spi/mcp25xxfd.ko</code>——决定走方案 1 还是 2。</li>
+        </ul>
+      </div>
+      <div class="label">生成 .config 基底（sama5_defconfig）</div>
+      <pre>make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig</pre>
       <div class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid #FAC775;margin:10px 0;font-size:12px;">
         <p style="margin:0;"><strong>📌 你容器里已有 linux-at91，就不必 clone。</strong>文档写 <code>git clone</code> 是"从零开始"的通用模板，假设你容器里啥都没有。直接 <code>cd</code> 进你现有的源码目录即可，省下大把时间。但有两件事务必确认：① 现有源码的版本 tag（<code>git describe --tags</code>）要和板子烧录镜像一致——否则你改的 DTS 路径、驱动状态可能和板子内核对不上；② 用 <code>O=/root/kbuild</code> 隔离产物，别把编译垃圾写进现有源码树。</p>
       </div>
@@ -2384,14 +2392,6 @@ make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig<
     <p>打开板子的 DTS 文件：<strong>5.10 等老版本在 <code>arch/arm/boot/dts/at91-sama5d27_som1_ek.dts</code>（没有 <code>microchip/</code> 子目录）；6.x 才移到 <code>arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dts</code></strong>。在你的版本对应路径下，在已有的 <code>&amp;spi6</code> 节点里加上 9.2 那段（<code>can_osc</code> 时钟放根节点 <code>/ { ... };</code>，<code>can@0</code> 子节点放 <code>&amp;spi6</code> 下）。</p>
 
     <h4>步骤 9.5：menuconfig 开驱动</h4>
-    <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
-      <strong>📌 怎么确认「这个内核版本」带 MCP2518FD 驱动？看三层：</strong>
-      <ul style="margin:6px 0 0;">
-        <li><strong>① 源码树里有没有代码</strong>：进 checkout 好的源码目录跑 <code>ls drivers/net/can/spi/mcp25xxfd/</code>（5.10 老名）或 <code>mcp251xfd/</code>（6.x）。看到 <code>.c</code> = 源码在、可编。也可 <code>grep -rn "MCP2518FD" drivers/net/can/spi/Kconfig</code> 看 Kconfig 选项。</li>
-        <li><strong>② 版本分界</strong>：主线 <strong>5.4 起</strong>就有此驱动（当时叫 <code>mcp25xxfd</code>，2517FD/2518FD 通用）；<strong>5.12 才改名 <code>mcp251xfd</code></strong> 并完善 FD 特性。所以你的板子 5.10 <strong>一定有源码</strong>，但符号是旧名 <code>CONFIG_CAN_MCP25XXFD</code>，FD 成熟度不如 6.x。</li>
-        <li><strong>③ 出厂镜像有没有编进去</strong>：见 <a href="#lv3-p9-env">步骤 9.9</a> 的 <code>zcat /proc/config.gz | grep CAN_MCP25XXFD</code> + <code>ls .../can/spi/mcp25xxfd.ko</code>——决定走方案 1 还是 2。</li>
-      </ul>
-    </div>
     <div class="cmd-block">
       <div class="label">容器内（已用 -it 进容器）：menuconfig 必须交互终端才能渲染</div>
       <pre>make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- menuconfig
