@@ -2376,8 +2376,10 @@ git status                     # 看有没有未提交本地改动，必要时 g
       <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
         <strong>🗂️ 容器本地工作副本（checkout 太慢时的快法）：</strong> 不必在 <code>/work</code> 挂载目录上 checkout。可直接把目标 tag 解包到容器本地磁盘（原生速度，省掉逐文件比对）：
         <pre style="margin:8px 0 0;">cd /work/linux-at91
+mkdir -p /root/linux-at91-2021.10          # tar -C 不会自建目录，必须先建，否则报 Cannot open
 git archive linux4microchip-2021.10 | tar -x -C /root/linux-at91-2021.10
-cd /root/linux-at91-2021.10     # 之后 9.4 改 DTS、9.6 编译都在这个目录；O=/root/kbuild 不变</pre>
+cd /root/linux-at91-2021.10     # 之后 9.4 改 DTS、9.6 编译都在这个目录；O=/root/kbuild 不变
+head -n 5 Makefile              # 确认 VERSION=5 PATCHLEVEL=10（此目录无 .git，不能 git describe）</pre>
         这样完全避开 <code>/work</code> 挂载的慢写；代价是 Mac 上看不到源码（需编辑时走 <code>docker exec</code> 或 <code>docker cp</code>）。若当前 checkout 已跑完则可忽略此法。
       </div>
       <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
