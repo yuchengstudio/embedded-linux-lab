@@ -2098,9 +2098,9 @@ ssh root@192.168.2.10 'chmod +x /root/led_blink && /root/led_blink'</pre>
         </table>
       </div>
       <div class="tip">
-        <strong>📌 版本分界：</strong> 以 <strong>5.4</strong> 为「MCP2517FD 进门」、<strong>5.12</strong> 为「MCP2518FD 完整支持」分界。驱动合进 mainline 后会顺带流进基于 ≥ 该版本的 stable / LTS 树；但比它老的 LTS（如 4.19）仍然没有。你板子的 linux-at91 须基于 <strong>≥ 5.12 的 mainline</strong> 且 <code>sama5_defconfig</code> 开了 <code>CONFIG_CAN_MCP251XFD</code>，才真正拿到这驱动。
+        <strong>📌 版本分界：</strong> 主线 <strong>5.4 起</strong>就合入了此驱动（当时叫 <code>mcp25xxfd</code>，对 MCP2517FD / MCP2518FD 通用）；<strong>5.12 才改名为 <code>mcp251xfd</code></strong> 并完善 FD 特性。驱动合进 mainline 后会顺带流进基于 ≥ 该版本的 stable / LTS 树；但比 5.4 老的 LTS（如 4.19）仍然没有。你板子的 5.10 源码树<strong>一定带这份代码</strong>（旧名 <code>CONFIG_CAN_MCP25XXFD</code>），只是 FD 成熟度不如 6.x。
       </div>
-      <p>⚠ <strong>关键：主线已有 ≠ 你板子正在跑的内核已有。</strong>出厂镜像通常是某个较旧的 linux-at91 版本，可能已带 <code>mcp251xfd.ko</code>（那你走方案 2 轻松），也可能压根没开 <code>CONFIG_CAN_MCP251XFD</code>（那就必须走方案 1 重编）。这正是后面那几条确认命令要回答的问题。</p>
+      <p>⚠ <strong>关键：源码带 ≠ 出厂镜像已开启。</strong>出厂镜像通常是某个较旧的 linux-at91 版本，可能已带 <code>mcp25xxfd.ko</code>（那你走方案 2 轻松），也可能压根没开 <code>CONFIG_CAN_MCP25XXFD</code>（那就必须走方案 1 重编）。这正是后面那几条确认命令要回答的问题。</p>
     </div>
 
     <div class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);">
@@ -2384,11 +2384,20 @@ make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig<
     <p>打开板子的 DTS 文件：<strong>5.10 等老版本在 <code>arch/arm/boot/dts/at91-sama5d27_som1_ek.dts</code>（没有 <code>microchip/</code> 子目录）；6.x 才移到 <code>arch/arm/boot/dts/microchip/at91-sama5d27_som1_ek.dts</code></strong>。在你的版本对应路径下，在已有的 <code>&amp;spi6</code> 节点里加上 9.2 那段（<code>can_osc</code> 时钟放根节点 <code>/ { ... };</code>，<code>can@0</code> 子节点放 <code>&amp;spi6</code> 下）。</p>
 
     <h4>步骤 9.5：menuconfig 开驱动</h4>
+    <div class="note" style="background:rgba(231,240,255,0.5);border-left:4px solid #9bbce0;">
+      <strong>📌 怎么确认「这个内核版本」带 MCP2518FD 驱动？看三层：</strong>
+      <ul style="margin:6px 0 0;">
+        <li><strong>① 源码树里有没有代码</strong>：进 checkout 好的源码目录跑 <code>ls drivers/net/can/spi/mcp25xxfd/</code>（5.10 老名）或 <code>mcp251xfd/</code>（6.x）。看到 <code>.c</code> = 源码在、可编。也可 <code>grep -rn "MCP2518FD" drivers/net/can/spi/Kconfig</code> 看 Kconfig 选项。</li>
+        <li><strong>② 版本分界</strong>：主线 <strong>5.4 起</strong>就有此驱动（当时叫 <code>mcp25xxfd</code>，2517FD/2518FD 通用）；<strong>5.12 才改名 <code>mcp251xfd</code></strong> 并完善 FD 特性。所以你的板子 5.10 <strong>一定有源码</strong>，但符号是旧名 <code>CONFIG_CAN_MCP25XXFD</code>，FD 成熟度不如 6.x。</li>
+        <li><strong>③ 出厂镜像有没有编进去</strong>：见 <a href="#lv3-p9-env">步骤 9.9</a> 的 <code>zcat /proc/config.gz | grep CAN_MCP25XXFD</code> + <code>ls .../can/spi/mcp25xxfd.ko</code>——决定走方案 1 还是 2。</li>
+      </ul>
+    </div>
     <div class="cmd-block">
       <div class="label">容器内（已用 -it 进容器）：menuconfig 必须交互终端才能渲染</div>
       <pre>make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- menuconfig
 # 进 Device Drivers → Networking support → CAN Bus subsystem → CAN Device Drivers
-#   → SPI CAN Controllers → Microchip MCP251xFD SPI CAN controller
+#   → SPI CAN Controllers → Microchip MCP251xFD / MCP2517FD SPI CAN controller
+#   （5.10 菜单可能写 MCP2517FD；认准符号 CONFIG_CAN_MCP25XXFD，别被菜单文字带偏）
 # 选 M（模块）或 *（编进内核），保存退出
 # 若报 ncurses / curses 相关错误：apt-get install -y libncurses-dev 后重试</pre>
     </div>
@@ -2397,18 +2406,19 @@ make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- sama5_defconfig<
     <p><code>menuconfig</code> 保存后，真正的"订单"写在 <code>O=/root/kbuild</code> 指定的 <strong><code>/root/kbuild/.config</code></strong> 里（因为用了 <code>O=</code>，不在源码树根目录）。三种"打开它"的方式：</p>
     <div class="cmd-block">
       <div class="label">① 只想确认某一项有没有写进去（最常用）</div>
-      <pre>grep CONFIG_CAN_MCP251XFD /root/kbuild/.config
-# 输出 CONFIG_CAN_MCP251XFD=m  → 成功开了模块
+      <pre># 5.10 等老内核符号是旧名 CONFIG_CAN_MCP25XXFD（5.12+ 才改名 CONFIG_CAN_MCP251XFD）
+grep CONFIG_CAN_MCP25XXFD /root/kbuild/.config
+# 输出 CONFIG_CAN_MCP25XXFD=m  → 成功开了模块
 # 没输出 / 显示 =n / 被 # 注释掉 → 没开</pre>
       <div class="label">② 用内核自带脚本直接改（不用进 TUI 界面）</div>
       <pre># 在容器里跑（scripts/config 是内核源码提供的改 .config 小工具）
 cd /root/kbuild
-/work/linux-at91/scripts/config --file /root/kbuild/.config --module CONFIG_CAN_MCP251XFD
+/work/linux-at91/scripts/config --file /root/kbuild/.config --module CONFIG_CAN_MCP25XXFD
 /work/linux-at91/scripts/config --file /root/kbuild/.config --enable CONFIG_CAN
 # --module =m  --enable =y  --disable =n</pre>
       <div class="label">③ 用编辑器直接看 / 手动改整份</div>
       <pre>nano /root/kbuild/.config          # 或 vi /work/linux-at91/.config（若没用 O=）
-# 找到对应行改：CONFIG_CAN_MCP251XFD=m  改完存盘即可</pre>
+# 找到对应行改：CONFIG_CAN_MCP25XXFD=m  改完存盘即可（6.x 是 CONFIG_CAN_MCP251XFD）</pre>
     </div>
     <div class="note" style="background:rgba(255,244,224,0.5);border-left:4px solid #FAC775;">
       <strong>📂 对应地，板子「正在跑的内核」用的配置在哪看？</strong> 见 <a href="#lv3-p9-env">步骤 9.9</a>：优先 <code>zcat /proc/config.gz</code>（需内核开了 <code>CONFIG_IKCONFIG_PROC</code>）；若没有这个文件，退而看 <code>/boot/config-$(uname -r)</code>。两条都是<strong>出厂/当前内核的 config</strong>，跟你刚才在自己机器上生成的 <code>/root/kbuild/.config</code> 是两回事——前者决定板子现状，后者决定你重编出来的新内核。对比两者就能判断"出厂缺了哪些选项、方案 1 要补哪些"。
