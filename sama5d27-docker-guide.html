@@ -2130,6 +2130,64 @@ uname -r                                # 板子内核这边（= 5.10.80-linux4m
       </ul>
       <p style="margin:6px 0 0;"><strong>所以你的项目放进行业坐标：</strong>走 Buildroot-at91 整镜像 = 厂商官方标准路线 = <strong>产品里最常用的方案</strong>；开发期先用「增量重编 + 拷 ko/dtb」快速验证（方案 3 实战），验证 OK 再固化 defconfig + 重烧 = 交付形态。日常 80% 工作量在 <strong>DTS + Kconfig</strong>，不是写驱动 C 代码。</p>
     </div>
+
+    <h3 style="margin-top:18px;">🗺️ 本实验路线图：Buildroot 整编路线 + 先快后稳（MCP2518FD，阶段 0–4）</h3>
+    <div class="note" style="background:rgba(244,240,255,0.6);border-left:4px solid #7b6bd6;">
+      本项目<strong>只走一条路线</strong>：Buildroot 整镜像（厂商官方标准）。全程分 <strong>5 个阶段</strong>，核心策略是<strong>「先快后稳」</strong>——阶段 3 用增量重编以最低成本验证「DTS 节点 + 驱动能 probe 到板上芯片」，阶段 4 把验证过的驱动固化为可复现的整镜像。每阶段都有<strong>目标 / 命令 / 成功判据 / 预计耗时</strong>，照着跑即可闭环。
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:13px;">
+      <thead>
+        <tr style="background:rgba(123,107,214,0.15);">
+          <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;width:64px;">阶段</th>
+          <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;">目标</th>
+          <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;">关键命令（容器内）</th>
+          <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;width:130px;">成功判据</th>
+          <th style="border:1px solid #ccc;padding:6px 8px;text-align:left;width:72px;">耗时</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="border:1px solid #ccc;padding:6px 8px;"><strong>0</strong><br>环境确认</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">确认 Buildroot 拉的内核 = 板子 <code>uname -r</code>，vermagic 必然一致</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;"><code>cd /work/buildroot-at91</code><br><code>grep -iE "BR2_LINUX_KERNEL" configs/atmel_sama5d27_som1_ek_mmc_dev_defconfig</code><br>板子：<code>uname -r</code></td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">两边都含 <code>2021.10</code></td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">~5 分</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #ccc;padding:6px 8px;"><strong>1</strong><br>整编 base 镜像</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">产出<strong>不含</strong> MCP2518 的干净 SD 镜像，作为后续基线</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;"><code>make O=/root/br-out atmel_sama5d27_som1_ek_mmc_dev_defconfig</code><br><code>nohup make O=/root/br-out -j$(nproc) &gt; /root/build.log 2&gt;&amp;1 &amp;</code><br><code>tail -f /root/build.log</code></td>
+          <td style="border:1px solid #ccc;padding:6px 8px;"><code>/root/br-out/images/</code> 出现 zImage/*.dtb/rootfs</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">1–2 时</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #ccc;padding:6px 8px;"><strong>2</strong><br>烧录 + 冒烟</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">确认 base 镜像能启动、板子基本外设正常</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">按 11.2 拷回 Mac → 11.3 烧录 SD → 上电<br>板子：<code>uname -r</code> / <code>ip link</code></td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">板子起来、SSH 可达</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">~15 分</td>
+        </tr>
+        <tr style="background:rgba(123,191,123,0.12);">
+          <td style="border:1px solid #ccc;padding:6px 8px;"><strong>3</strong><br><span style="color:#2e7d32;">先快</span><br>增量验证</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">最低成本确认 DTS 节点 + 驱动能 probe 到芯片</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;"><strong>见下方「方案 3 实战」5 步：</strong>开 <code>CONFIG_CAN_MCP25XXFD</code> → 加 DTS 节点 → <code>linux-rebuild</code> → scp ko/dtb → <code>modprobe</code></td>
+          <td style="border:1px solid #ccc;padding:6px 8px;"><code>dmesg</code> 见 can1 出现；<code>ip link set can1 up</code> 不报错</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">15–30 分</td>
+        </tr>
+        <tr style="background:rgba(91,138,214,0.12);">
+          <td style="border:1px solid #ccc;padding:6px 8px;"><strong>4</strong><br><span style="color:#1a56c4;">后稳</span><br>固化重烧</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">把验证过的驱动固化为可复现交付形态</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;"><code>linux-savedefconfig</code> 存内核配置 → <code>BR2_LINUX_KERNEL_CUSTOM_DTS_PATH</code> 持久 dts → 重烧整镜像<br><span style="color:#555;">（= 方案 3 整镜像路线内的「固化」步骤，不是新方案；细节见下方「方案 3 实战」末尾 💡 固化框；重烧操作见 <a href="#lv3-p11">11.1 → 11.2 → 11.3</a>）</span></td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">重烧后 mcp25xxfd 随镜像存在、长期不丢</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;">1–2 时</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="note" style="background:rgba(255,244,224,0.6);border-left:4px solid var(--amber);">
+      <strong>🎯 阅读顺序：</strong>阶段 0–2 的命令细节见 <a href="#lv3-p11">步骤 11.1 / 11.2 / 11.3</a>；阶段 3–4 的完整操作见下方「方案 3 实战」小节。<strong>阶段 1 你当前还没跑</strong>——按路线图从阶段 1 开始编 base 镜像即可（默认 2021.10 = 板子版本，无需改任何东西）。阶段 3 是「先快」验证、阶段 4 是「后稳」固化，二者不矛盾、顺序执行。
+    </div>
+    </div>
     <div class="note" style="background:rgba(234,243,222,0.5);border-left:4px solid #3B6D11;">
       <strong>📌 另一条更省心的路：Buildroot 整镜像（步骤 11.1）</strong>
       <p style="margin:6px 0 0;">除了下面方案 1（内核树重编）和方案 2（overlay），你还可以走 <a href="#lv3-p11">步骤 11.1</a> 的 Buildroot 整镜像路线：它把内核 + 驱动模块 + 根文件系统从<strong>同一棵源码树</strong>一起编出来，<strong>vermagic 天然与板子一致</strong>，不存在"外部模块塞不进"的问题。</p>
@@ -2327,7 +2385,7 @@ uname -r                                # 板子内核这边（= 5.10.80-linux4m
       <table>
         <thead><tr><th>配置项</th><th>写在哪个 Kconfig 文件</th><th>menuconfig 里大致路径</th></tr></thead>
         <tbody>
-          <tr><td><code>CONFIG_CAN</code></td><td><code>net/can/Kconfig</code></td><td>Networking support → CAN bus subsystem</td></tr>
+          <tr><td><code>CONFIG_CAN</code></td><td><code>net/can/Kconfig</code></td><td>Networking support → CAN bus subsystem support</td></tr>
           <tr><td><code>CONFIG_CAN_DEV</code></td><td><code>net/can/Kconfig</code></td><td>同上 → CAN Device Drivers</td></tr>
           <tr><td><code>CONFIG_SPI</code></td><td><code>drivers/spi/Kconfig</code></td><td>Device Drivers → SPI support</td></tr>
           <tr><td><code>CONFIG_SPI_ATMEL</code></td><td><code>drivers/spi/Kconfig</code></td><td>SPI support → Atmel SPI controller</td></tr>
@@ -2518,7 +2576,7 @@ head -n 5 Makefile              # 确认 VERSION=5 PATCHLEVEL=10（此目录无 
     <div class="cmd-block">
       <div class="label">容器内（已用 -it 进容器）：menuconfig 必须交互终端才能渲染</div>
       <pre>make O=/root/kbuild ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- menuconfig
-# 进 Device Drivers → Networking support → CAN Bus subsystem → CAN Device Drivers
+# 进【顶层菜单】Networking support → CAN bus subsystem support → CAN Device Drivers
 #   → SPI CAN Controllers → Microchip MCP251xFD / MCP2517FD SPI CAN controller
 #   （5.10 菜单可能写 MCP2517FD；认准符号 CONFIG_CAN_MCP25XXFD，别被菜单文字带偏）
 # 选 M（模块）或 *（编进内核），保存退出
@@ -2773,15 +2831,228 @@ cansend can1 123##1.11.22.33.44</pre>
       <strong>🎯 关键认知：Buildroot 不是「每加一个驱动就重烧整张卡」。</strong> 你 base 镜像已烧好、板子能跑之后，想加 MCP2518 = 只<strong>增量重编内核 + 模块 + dtb</strong>（工具链 / U-Boot / 根文件系统有构建缓存、不重编，比第一次全编快很多），再把新出的 <code>mcp25xxfd.ko</code> 和 <code>*.dtb</code> 拷上板即可。而且增量重编仍是 <strong>2021.10 同源</strong>，vermagic 和你板子正在跑的内核一致 → <code>.ko</code> 上去能直接 <code>modprobe</code>，不存在方案 1 那种"外部模块对不上"的问题。
     </div>
     <div class="cmd-block">
-      <div class="label">① 容器内：开 MCP2518FD 驱动（内核 menuconfig，5.10 显示旧名 mcp25xxfd）</div>
+      <div class="label">① 容器内：开 MCP2518FD 驱动（内核 menuconfig；你截图里 prompt 是「MCP251xFD」= 新名 mcp251xfd）</div>
       <pre>cd /work/buildroot-at91
 make O=/root/br-out linux-menuconfig
-#   Device Drivers → Networking support → CAN Bus subsystem
+#   【顶层菜单】Networking support → CAN bus subsystem support
 #     → CAN Device Drivers → SPI CAN Controllers
 #     → Microchip MCP251xFD SPI CAN controller  →  选 M（模块）
-#   ★ 同时确认：CAN Bus subsystem 本身已 = M 或 *（CONFIG_CAN）；SPI 控制器已开（CONFIG_SPI_ATMEL）
-#   ★ 5.10 菜单里名字是 mcp25xxfd（符号 CONFIG_CAN_MCP25XXFD）；别照 6.x 写成 mcp251xfd
+#   ★ 同时确认：CAN bus subsystem support 本身已 = M 或 *（CONFIG_CAN）；SPI 控制器已开（CONFIG_SPI_ATMEL）
+#   ★ 你截图里菜单 prompt 是「Microchip MCP251xFD SPI CAN controllers」（小写 x、复数 controllers）
+#     = 新命名 mcp251xfd，符号是 CONFIG_CAN_MCP251XFD —— 别照 5.10 老文档写成 mcp25xxfd/CONFIG_CAN_MCP25XXFD！
+#   ★ 重编后用 grep 确认实际符号名（Ground truth 以 .config 为准，不信注释）：
+#        grep -E "CONFIG_CAN_MCP25" /root/br-out/build/linux-*/.config
 #   保存退出（菜单里 &lt;Save&gt;）</pre>
+    </div>
+    <div class="note" style="background:rgba(255,247,230,0.6);border-left:4px solid var(--amber);">
+      <strong>💡 为什么「只选这一项」还不够 / 还要确认那两条：</strong>
+      <p style="margin:6px 0 0;">mcp251xfd 在 Kconfig 里是 <code>depends on NET</code> + <code>depends on CAN</code> + <code>depends on CAN_DEV</code> + <code>depends on SPI</code> 的「子项」（你 <code>/</code> 搜 MCP251X/MCP251XFD 出来的真实 Depends on 链就是 <code>NET &amp;&amp; CAN &amp;&amp; CAN_DEV &amp;&amp; SPI</code> 四项）。正因为它现在能在菜单里显示并被你选中，说明上游的 <strong>网络子系统（CONFIG_NET）、CAN 子系统（CONFIG_CAN / CONFIG_CAN_DEV）和 SPI 子系统（CONFIG_SPI）早已被打开</strong>——否则这个选项压根不出现。所以这四样你不用再手动开，扫一眼确认都是 = M 或 * 即可。</p>
+      <p style="margin:6px 0 0;">但 <code>CONFIG_SPI_ATMEL</code> 是另一回事：它驱动的是 SAMA5D27 这颗 SoC 上的 SPI 控制器（把字节真正推到引脚的「司机」），<strong>不属于</strong> mcp251xfd 的 depends 链。mcp251xfd 只依赖 SPI「子系统」，不依赖具体的 Atmel 控制器驱动。若 SPI_ATMEL 没开，mcp251xfd.ko 能加载，却<strong>找不到 SPI 总线可挂</strong> → <code>dmesg</code> 报 probe 失败、<code>/dev/can0</code> 起不来。base defconfig 通常已把 SPI_ATMEL 编成 =y（板子 SPI 还接别的器件），但务必在 menuconfig 里确认一次；若显示 [ ] 没开，按 Y 打开再重编。</p>
+      <p style="margin:6px 0 0;">类比：装 USB 摄像头要三样——USB 子系统、你主板的 USB 主机控制器驱动（xhci）、摄像头驱动（uvcvideo）。选 uvcideo 只代表 USB 子系统已开，<strong>不代表</strong> xhci 已开。这里 mcp251xfd=摄像头驱动、SPI_ATMEL=主机控制器驱动、SPI 子系统=USB 子系统。</p>
+    </div>
+    <div class="note" style="background:rgba(239,243,255,0.6);border-left:4px solid #5b8ad6;">
+      <strong>💡 新手怎么自己查：mcp251xfd 的两层依赖</strong>
+      <p style="margin:6px 0 0;">驱动要既「能编译」又「板子上真能用」，依赖分两类、查法不同。先记心法：Kconfig 里 <code>depends on X</code> = X 必须已开，否则这项在菜单里根本不出现；<code>select Y</code> = 你一选本驱动 Y 就被自动拉上，不用管。</p>
+      <p style="margin:8px 0 0;"><strong>📌 「depends on」本身不是选项，是 Kconfig 的语法关键字。</strong> 它和 <code>tristate</code> / <code>select</code> / <code>help</code> 一样，是写在某个选项「说明书」里的一句<strong>约束声明</strong>，本身不可开关。看真实 Kconfig 片段就能分清：</p>
+      <pre style="margin:6px 0 0; font-size:12px;">config CAN_MCP251XFD            ← 这才是选项（菜单里看到的项）
+    tristate "Microchip MCP251xFD SPI CAN controllers"
+    depends on NET              ← 修饰上一行的约束，不是独立选项
+    depends on CAN
+    depends on CAN_DEV
+    depends on SPI
+    select REGMAP_SPI          ← 同样是修饰句，自动拉取</pre>
+      <p style="margin:6px 0 0;">所以「depends on X = X 必须已开」这句话里，<strong>只有 X（如 CONFIG_CAN）才是真正的选项、需要你去开</strong>；<code>depends on</code> 只是描述关系的字眼。类比：选项是菜单上的一道菜，<code>depends on</code> 是这道菜旁印的小字「需先有食材 X」——它不是一道菜、不能点，只是对那道菜的约束。</p>
+      <p style="margin:8px 0 0;"><strong>💡 menuconfig 的作用（新手常混）</strong></p>
+      <p style="margin:4px 0 0;">menuconfig 是 Kconfig 的<strong>文本前端界面</strong>：你看到的菜单、能勾的选项，全部来自 Kconfig 的定义。它的唯一本职工作就是<strong>让人方便地勾选、把结果写进 <code>.config</code></strong>。记住三点：</p>
+      <ul style="margin:4px 0 0; padding-left:18px; font-size:12px; line-height:1.7;">
+        <li><strong>只读 Kconfig、只写 <code>.config</code></strong>——Kconfig 源文件本身<strong>不被修改</strong>（三者分工：Kconfig = 选项定义、menuconfig = 勾选编辑器、<code>.config</code> = 勾选结果）。</li>
+        <li><strong>只设编译开关，不直接碰硬件</strong>：勾 SPI_ATMEL 只是往 <code>.config</code> 写一行 <code>CONFIG_SPI_ATMEL=y</code>（纯文本，软件层）。</li>
+        <li>真正「开外设」在勾选两步之后：① <code>make</code> 把该驱动源码编进 zImage；② 板子启动、驱动 probe 去写 SoC 的 SPI 硬件寄存器（时钟门控 / 引脚复用 / 中断）→ 硬件才活。</li>
+      </ul>
+      <p style="margin:4px 0 0; font-size:12px;">所以 menuconfig 是<strong>编译期开关</strong>，硬件上电初始化是<strong>运行时</strong>的事——这也正是 SPI_ATMEL 被归到「运行时依赖」那一类的原因。</p>
+      <p style="margin:8px 0 0;"><strong>📖 menuconfig 符号速读表（看一眼就懂当前状态）</strong></p>
+      <table style="border-collapse:collapse; width:100%; margin:4px 0 0; font-size:12px;">
+        <thead><tr style="background:rgba(0,0,0,0.04);">
+          <th style="border:1px solid #ccc; padding:4px 8px; text-align:left;">菜单显示</th>
+          <th style="border:1px solid #ccc; padding:4px 8px; text-align:left;">含义</th>
+          <th style="border:1px solid #ccc; padding:4px 8px; text-align:left;">对应 .config 写法</th>
+        </tr></thead>
+        <tbody>
+          <tr><td style="border:1px solid #ccc; padding:4px 8px;"><code>&lt;*&gt;</code> 或 <code>[*]</code></td><td style="border:1px solid #ccc; padding:4px 8px;">编进内核（built-in，上电即有）</td><td style="border:1px solid #ccc; padding:4px 8px;"><code>CONFIG_xxx=y</code></td></tr>
+          <tr><td style="border:1px solid #ccc; padding:4px 8px;"><code>&lt;M&gt;</code> 或 <code>[M]</code></td><td style="border:1px solid #ccc; padding:4px 8px;">编成模块（运行时 <code>insmod</code>/<code>modprobe</code>）</td><td style="border:1px solid #ccc; padding:4px 8px;"><code>CONFIG_xxx=m</code></td></tr>
+          <tr><td style="border:1px solid #ccc; padding:4px 8px;"><code>&lt; &gt;</code> 或 <code>[ ]</code></td><td style="border:1px solid #ccc; padding:4px 8px;">关闭（未选）</td><td style="border:1px solid #ccc; padding:4px 8px;">该行不存在 / <code># CONFIG_xxx is not set</code></td></tr>
+          <tr><td style="border:1px solid #ccc; padding:4px 8px;"><code>---</code> 灰色</td><td style="border:1px solid #ccc; padding:4px 8px;">依赖未满足，本项不可选</td><td style="border:1px solid #ccc; padding:4px 8px;">—</td></tr>
+          <tr><td style="border:1px solid #ccc; padding:4px 8px;"><code>---&gt;</code></td><td style="border:1px solid #ccc; padding:4px 8px;">子菜单（回车进入）</td><td style="border:1px solid #ccc; padding:4px 8px;">—</td></tr>
+        </tbody>
+      </table>
+      <p style="margin:4px 0 0; font-size:11px; color:#555;">实操提示：你之前截到的 <code>&lt;*&gt; Atmel SPI Controller</code> 就是「编进内核」，最稳的形式——板子一启动 SPI 总线就准备好，mcp251xfd 模块加载时不会再因"找不到总线"而 probe 失败。</p>
+      <div style="margin:8px 0 4px;">
+        <svg viewBox="0 0 680 480" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+          <defs>
+            <marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+          <text x="340" y="30" text-anchor="middle" font-size="15" font-weight="600" fill="#2C2C2A">mcp251xfd 的两层依赖</text>
+          <text x="340" y="50" text-anchor="middle" font-size="11" fill="#777">驱动要能编译 + 板子上真能用，依赖分两类，查法不同</text>
+          <rect x="225" y="64" width="230" height="52" rx="8" fill="#9FE1CB" stroke="#0F6E56" stroke-width="0.5"/>
+          <text x="340" y="86" text-anchor="middle" font-size="13.5" font-weight="600" fill="#04342C">CONFIG_CAN_MCP251XFD = m</text>
+          <text x="340" y="103" text-anchor="middle" font-size="10.5" fill="#085041">你按 M 选中的那一项</text>
+          <line x1="300" y1="116" x2="190" y2="150" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow2)"/>
+          <line x1="380" y1="116" x2="490" y2="150" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow2)"/>
+          <rect x="20" y="150" width="320" height="258" rx="10" fill="#E6F1FB" stroke="#185FA5" stroke-width="1.5"/>
+          <text x="36" y="176" font-size="13.5" font-weight="600" fill="#042C53">① 编译 / 菜单依赖（Kconfig 强制）</text>
+          <text x="36" y="194" font-size="10.5" fill="#0C447C">对应 Kconfig 里 depends on 列出</text>
+          <line x1="36" y1="204" x2="324" y2="204" stroke="#B5D4F4" stroke-width="0.5"/>
+          <circle cx="50" cy="230" r="4" fill="#185FA5"/>
+          <text x="64" y="226" font-size="12" fill="#042C53">CONFIG_NET  (网络子系统)</text>
+          <text x="64" y="242" font-size="10" fill="#3B6D11">选项能显示 ⇒ 已开 ✓</text>
+          <circle cx="50" cy="260" r="4" fill="#185FA5"/>
+          <text x="64" y="256" font-size="12" fill="#042C53">CONFIG_CAN  (CAN 协议栈)</text>
+          <text x="64" y="272" font-size="10" fill="#3B6D11">同上 ⇒ 已开 ✓</text>
+          <circle cx="50" cy="290" r="4" fill="#185FA5"/>
+          <text x="64" y="286" font-size="12" fill="#042C53">CONFIG_SPI  (SPI 子系统)</text>
+          <text x="64" y="302" font-size="10" fill="#3B6D11">同上 ⇒ 已开 ✓</text>
+          <circle cx="50" cy="320" r="4" fill="#185FA5"/>
+          <text x="64" y="316" font-size="12" fill="#042C53">CONFIG_CAN_DEV (CAN 设备框架)</text>
+          <text x="64" y="332" font-size="10" fill="#3B6D11">同上 ⇒ 已开 ✓</text>
+          <circle cx="50" cy="350" r="4" fill="#888780"/>
+          <text x="64" y="346" font-size="12" fill="#444441">select REGMAP_SPI</text>
+          <text x="64" y="362" font-size="10" fill="#888780">自动拉，不用管</text>
+          <text x="36" y="392" font-size="10" fill="#0C447C">不满足 ⇒ 菜单里这一项根本不出现</text>
+          <rect x="340" y="150" width="320" height="258" rx="10" fill="#FAEEDA" stroke="#854F0B" stroke-width="1.5"/>
+          <text x="356" y="176" font-size="13.5" font-weight="600" fill="#412402">② 运行时 / 硬件依赖（Kconfig 不管）</text>
+          <text x="356" y="194" font-size="10.5" fill="#633806">编译能过，但板子上缺了就不工作</text>
+          <line x1="356" y1="204" x2="644" y2="204" stroke="#FAC775" stroke-width="0.5"/>
+          <circle cx="370" cy="230" r="4" fill="#A32D2D"/>
+          <text x="384" y="226" font-size="12" fill="#412402">CONFIG_SPI_ATMEL</text>
+          <text x="384" y="242" font-size="10" fill="#A32D2D">SAMA5 的 SPI 控制器 ⚠ 须另确认</text>
+          <circle cx="370" cy="270" r="4" fill="#A32D2D"/>
+          <text x="384" y="266" font-size="12" fill="#412402">DTS 节点（板上接线）</text>
+          <text x="384" y="282" font-size="10" fill="#A32D2D">SPI 总线号/INT·CS/晶振 ⚠ 须另写</text>
+          <line x1="356" y1="300" x2="644" y2="300" stroke="#FAC775" stroke-width="0.5"/>
+          <text x="356" y="320" font-size="10.5" fill="#633806">mcp251xfd 只是 SPI 设备驱动，</text>
+          <text x="356" y="336" font-size="10.5" fill="#633806">要有人（控制器）先把总线拉起；</text>
+          <text x="356" y="352" font-size="10.5" fill="#A32D2D">漏 SPI_ATMEL ⇒ 模块能载、probe 失败</text>
+          <text x="356" y="368" font-size="10.5" fill="#A32D2D">/dev/can0 起不来</text>
+          <rect x="20" y="420" width="640" height="40" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="1"/>
+          <text x="34" y="444" font-size="10.5" fill="#173404">怎么查：menuconfig 高亮按 `?` 看 Depends on ｜ 读 drivers/net/can/spi/Kconfig ｜ 重编后 grep .config</text>
+        </svg>
+      </div>
+      <p style="margin:14px 0 0;"><strong>② 编译时 vs 运行时：依赖「什么时候」暴露</strong></p>
+      <div style="margin:8px 0 4px;">
+        <svg viewBox="0 0 680 330" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+          <defs>
+            <marker id="tarrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
+          <text x="340" y="28" text-anchor="middle" font-size="14.5" font-weight="600" fill="#2C2C2A">编译时 vs 运行时：依赖「什么时候」暴露</text>
+          <text x="340" y="48" text-anchor="middle" font-size="11" fill="#777">Kconfig 管的是编译期（静态）；运行时（板子上电后）的问题它看不见</text>
+          <line x1="40" y1="78" x2="640" y2="78" stroke="#9a9a96" stroke-width="2" marker-end="url(#tarrow)"/>
+          <text x="48" y="72" font-size="11" fill="#0C447C">◀ 编译时</text>
+          <text x="596" y="72" font-size="11" fill="#A32D2D">运行时 ▶</text>
+          <rect x="20" y="95" width="300" height="200" rx="10" fill="#E6F1FB" stroke="#185FA5" stroke-width="1.5"/>
+          <text x="36" y="120" font-size="13.5" font-weight="600" fill="#042C53">① 编译时（Kconfig 管）</text>
+          <text x="36" y="138" font-size="10.5" fill="#0C447C">你坐电脑前敲 make，内核被编译的那一刻</text>
+          <circle cx="44" cy="165" r="3" fill="#185FA5"/>
+          <text x="56" y="169" font-size="11.5" fill="#042C53">Kconfig 决定哪些 C 代码编进镜像</text>
+          <circle cx="44" cy="190" r="3" fill="#185FA5"/>
+          <text x="56" y="194" font-size="11.5" fill="#042C53">产出 zImage + mcp251xfd.ko</text>
+          <circle cx="44" cy="215" r="3" fill="#185FA5"/>
+          <text x="56" y="219" font-size="11.5" fill="#042C53">依赖缺 → 菜单里根本不显示</text>
+          <text x="56" y="233" font-size="10" fill="#3B6D11">（编译前就能验证，本例已满足）</text>
+          <text x="36" y="262" font-size="10.5" fill="#0C447C">→ NET/CAN/SPI/CAN_DEV 都在这里</text>
+          <text x="36" y="278" font-size="10.5" fill="#0C447C">   被 base defconfig 自动打开</text>
+          <rect x="360" y="95" width="300" height="200" rx="10" fill="#FAEEDA" stroke="#854F0B" stroke-width="1.5"/>
+          <text x="376" y="120" font-size="13.5" font-weight="600" fill="#412402">② 运行时（Kconfig 不管）</text>
+          <text x="376" y="138" font-size="10.5" fill="#633806">板子上电、Linux 启动、驱动被加载之后</text>
+          <circle cx="384" cy="165" r="3" fill="#A32D2D"/>
+          <text x="396" y="169" font-size="11.5" fill="#412402">insmod mcp251xfd.ko 去 SPI 总线找设备</text>
+          <circle cx="384" cy="190" r="3" fill="#A32D2D"/>
+          <text x="396" y="194" font-size="11.5" fill="#412402">SPI_ATMEL 把总线拉起 / DTS 告诉引脚</text>
+          <circle cx="384" cy="215" r="3" fill="#A32D2D"/>
+          <text x="396" y="219" font-size="11.5" fill="#412402">芯片应答寄存器确认</text>
+          <text x="396" y="233" font-size="10" fill="#A32D2D">（编译时无法验证，板子实际焊了啥不知道）</text>
+          <text x="376" y="262" font-size="10.5" fill="#633806">→ SPI_ATMEL / DTS / 硬件本身在这里</text>
+          <text x="376" y="278" font-size="10.5" fill="#633806">   漏了 → 模块能载、probe 失败</text>
+          <line x1="340" y1="95" x2="340" y2="295" stroke="#bbb" stroke-width="1" stroke-dasharray="4 4"/>
+          <text x="340" y="200" text-anchor="middle" font-size="9.5" fill="#666">烧录</text>
+          <text x="340" y="214" text-anchor="middle" font-size="9.5" fill="#666">上电</text>
+          <rect x="20" y="305" width="640" height="18" rx="6" fill="#EAF3DE" stroke="#3B6D11" stroke-width="1"/>
+          <text x="34" y="318" font-size="10.5" fill="#173404">一句话：编译都过了、镜像也烧了，板子一跑才发现缺的东西 = 运行时依赖</text>
+        </svg>
+      </div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; margin:8px 0 4px;">
+        <div style="flex:1; min-width:260px; background:rgba(230,241,251,0.7); border:1px solid #B5D4F4; border-radius:8px; padding:8px 10px;">
+          <strong style="color:#0C447C;">① 编译 / 菜单依赖（Kconfig <code>depends on</code> 强制）</strong>
+          <ul style="margin:6px 0 0; padding-left:18px; font-size:12.5px; line-height:1.7;">
+            <li><code>CONFIG_NET</code>（网络子系统）—— 选项能显示 ⇒ 已开 ✓</li>
+            <li><code>CONFIG_CAN</code>（CAN 协议栈）—— 同上 ⇒ 已开 ✓</li>
+            <li><code>CONFIG_SPI</code>（SPI 子系统）—— 同上 ⇒ 已开 ✓</li>
+            <li><code>CONFIG_CAN_DEV</code>（CAN 设备框架）—— 同上 ⇒ 已开 ✓</li>
+            <li><code>select REGMAP_SPI</code> —— 自动拉，忽略</li>
+          </ul>
+          <p style="margin:6px 0 0; font-size:11.5px; color:#0C447C;">不满足 ⇒ 菜单里这一项根本不出现。</p>
+        </div>
+        <div style="flex:1; min-width:260px; background:rgba(250,238,218,0.7); border:1px solid #FAC775; border-radius:8px; padding:8px 10px;">
+          <strong style="color:#633806;">② 运行时 / 硬件依赖（Kconfig 不管）</strong>
+          <ul style="margin:6px 0 0; padding-left:18px; font-size:12.5px; line-height:1.7;">
+            <li><code>CONFIG_SPI_ATMEL</code> —— SAMA5 的 SPI 控制器 ⚠ 仍在 <strong>menuconfig</strong> 里另开（Device Drivers → SPI support → Atmel SPI controller），它仍是 Kconfig 选项、<strong>不是 DTS</strong></li>
+            <li>DTS 节点（SPI 总线号 / INT·CS 引脚 / 晶振）—— ⚠ 必须另写（9.4）</li>
+          </ul>
+          <p style="margin:6px 0 0; font-size:11.5px; color:#633806;">mcp251xfd 只是「SPI 设备驱动」，要有人（控制器）先把 SPI 总线拉起来；漏掉 SPI_ATMEL ⇒ 模块能载、probe 失败、<code>/dev/can0</code> 起不来。</p>
+          <p style="margin:6px 0 0; font-size:11px; color:#A32D2D;">⚠ 注意：「运行时依赖」说的是<strong>问题暴露的时机</strong>（板子跑起来后才爆），<strong>不等于都在 DTS 里配</strong>。SPI_ATMEL 仍是 menuconfig 选项（只是不被 mcp251xfd 的 depends on 自动拉起，需手动确认）；只有「DTS 节点」那一项才是设备树文件；此外还有物理硬件（芯片/电源/晶振）也属运行时层。</p>
+        </div>
+      </div>
+      <p style="margin:8px 0 0;"><strong>三种查法（任选）：</strong></p>
+      <ol style="margin:4px 0 0; padding-left:20px; font-size:12.5px; line-height:1.7;">
+        <li><strong>menuconfig 内按 <code>?</code></strong>：高亮该项 → 弹窗里的 <code>Depends on:</code> 即为编译依赖；<code>Selects:</code> 是自动拉的（忽略）。</li>
+        <li><strong>读 Kconfig 源码</strong>：<code>vi /root/br-out/build/linux-*/drivers/net/can/spi/Kconfig</code> 搜 <code>MCP251XFD</code>，白纸黑字看 <code>depends on</code> / <code>select</code>。</li>
+        <li><strong>重编后 grep <code>.config</code></strong>：<code>grep -E "CONFIG_NET=|CONFIG_CAN=|CONFIG_CAN_DEV|CONFIG_SPI=|CONFIG_SPI_ATMEL|CONFIG_CAN_MCP251" /root/br-out/build/linux-*/.config</code> —— <code>=m</code>/<code>=y</code> 已开，<code>is not set</code> 没开。</li>
+      </ol>
+      <p style="margin:8px 0 0;"><strong>给你的速查清单：</strong></p>
+      <table style="border-collapse:collapse; width:100%; margin:4px 0 0; font-size:12px;">
+        <thead><tr style="background:rgba(0,0,0,0.04);">
+          <th style="border:1px solid #ccc; padding:4px 8px; text-align:left;">依赖</th>
+          <th style="border:1px solid #ccc; padding:4px 8px; text-align:left;">类型</th>
+          <th style="border:1px solid #ccc; padding:4px 8px; text-align:left;">你要做</th>
+        </tr></thead>
+        <tbody>
+          <tr><td style="border:1px solid #ccc; padding:4px 8px;"><code>CONFIG_NET</code> / <code>CONFIG_CAN</code> / <code>CONFIG_SPI</code> / <code>CONFIG_CAN_DEV</code></td><td style="border:1px solid #ccc; padding:4px 8px;">编译依赖（<code>depends on</code>）</td><td style="border:1px solid #ccc; padding:4px 8px;">已自动满足，不用管</td></tr>
+          <tr><td style="border:1px solid #ccc; padding:4px 8px;"><code>REGMAP_SPI</code></td><td style="border:1px solid #ccc; padding:4px 8px;"><code>select</code> 自动拉</td><td style="border:1px solid #ccc; padding:4px 8px;">不用管</td></tr>
+          <tr><td style="border:1px solid #ccc; padding:4px 8px;"><code>CONFIG_SPI_ATMEL</code></td><td style="border:1px solid #ccc; padding:4px 8px;">运行时硬件依赖（Kconfig 不管）</td><td style="border:1px solid #ccc; padding:4px 8px;"><strong>必须确认已开</strong></td></tr>
+          <tr><td style="border:1px solid #ccc; padding:4px 8px;">DTS 节点</td><td style="border:1px solid #ccc; padding:4px 8px;">设备树（非 Kconfig）</td><td style="border:1px solid #ccc; padding:4px 8px;">下一步 9.4 另写</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note" style="background:rgba(234,243,222,0.5);border-left:4px solid #3B6D11;">
+      <strong>💡 menuconfig 效率神器：<code>/</code> 搜索键</strong>
+      <p style="margin:6px 0 0;">进入 menuconfig 后（如你现在在 Networking support 菜单里），直接按 <code>/</code> 键进搜索框，输入关键词（如 <code>mcp25</code>、<code>MCP2518</code>、<code>SPI_ATMEL</code>、<code>CAN</code>）回车，会列出所有匹配的 Kconfig 符号及其<strong>完整位置路径</strong>，按提示数字键（如 <code>1</code>）直接跳到那一项。比层层翻子菜单快得多——尤其内核配置树很深时。搜出来的每行还会显示 <code>Symbol: XXX [=n/y/m]</code>，一眼看清当前是否已开启；想找某个配置却不知道在哪个子菜单，全靠它。</p>
+    </div>
+    <div class="note" style="background:rgba(232,245,233,0.6);border-left:4px solid #7bbf7b;">
+      <strong>📖 怎么读 <code>/</code> 搜出来的信息页（逐字段说明）</strong>
+      <p style="margin:6px 0 0;">按 <code>/</code> 搜一个符号、回车后进入的详情页，是确认「它依赖谁、在菜单哪、当前开没开」的权威来源。下面是你刚搜 <code>CAN_MCP251X</code> 看到的那份（与本文档 mcp251xfd 同属 SPI CAN 设备驱动，字段结构一致）：</p>
+      <pre style="margin:8px 0; font-size:12px;">Symbol: CAN_MCP251X [=m]
+Type : tristate
+Defined at drivers/net/can/spi/Kconfig:10
+Prompt: Microchip MCP251x and MCP25625 SPI CAN controllers
+Depends on: NET [=y] && CAN [=y] && CAN_DEV [=y] && SPI [=y]
+Location:
+  -> Networking support (NET [=y])
+    -> CAN bus subsystem support (CAN [=y])
+      -> CAN Device Drivers
+        -> Platform CAN drivers with Netlink support (CAN_DEV [=y])
+          -> CAN SPI interfaces</pre>
+      <ul style="margin:6px 0 0; padding-left:18px; font-size:12.5px; line-height:1.8;">
+        <li><strong>Symbol: CAN_MCP251X [=m]</strong> —— Kconfig 里的变量名（你写 <code>CONFIG_CAN_MCP251X</code> 用的就是它）；方括号 <code>[=m]</code> 是当前状态，<code>=m</code> 已编成模块、<code>=y</code> 编进内核、<code>=n</code> 未开。</li>
+        <li><strong>Type : tristate</strong> —— 类型是「三态」，即只能取 <code>y/m/n</code> 三值之一；另有 <code>bool</code>（二态 y/n）、<code>int</code>、<code>string</code> 等。</li>
+        <li><strong>Defined at drivers/net/can/spi/Kconfig:10</strong> —— 这个选项在源码里的定义位置（文件路径 + 行号），想看原始 <code>depends on</code>/<code>select</code> 最权威就是 <code>vi</code> 它。</li>
+        <li><strong>Prompt: ...</strong> —— 菜单里显示的那个名字，就是你在 menuconfig 里高亮的那一行文字。</li>
+        <li><strong>Depends on: NET && CAN && CAN_DEV && SPI</strong> —— 编译依赖，四项必须都已开（<code>=y</code> 或 <code>=m</code>），否则这一项在菜单里不出现；本例四项都已 =y。</li>
+        <li><strong>Location:</strong> —— 它在菜单树里的「住址」，从顶层往下逐层（注意 <code>Platform CAN drivers with Netlink support</code> 是 <code>CAN_DEV</code> 的菜单名，<code>CAN SPI interfaces</code> 是它下的子菜单）。想手动翻菜单就照这条路径走。</li>
+      </ul>
+      <p style="margin:6px 0 0; font-size:11.5px; color:#1f4d09;">提示：按 <code>?</code> 也能看到 Depends on，但不显示 <code>Type</code> 和 <code>Defined at</code>——<code>/</code> 搜出来的这份更全，是排查依赖的「金标准」页。</p>
     </div>
     <div class="cmd-block">
       <div class="label">② 加设备树节点（让驱动能 probe 到板上的芯片）</div>
